@@ -193,7 +193,7 @@ export type Accesos = {
 };
 
 export const AccesosAPI = {
-  obtener: (iduser: string) => api.get<Accesos>(`/accesos/${iduser}`).then((r) => r.data),
+  obtener: (iduser: string | number) => api.get<Accesos>(`/accesos/${iduser}`).then((r) => r.data),
   guardarMenu: (iduser: string, items: { idmenu_principal: number; permiso: number }[]) =>
     api.put(`/accesos/${iduser}/menu`, { items }).then((r) => r.data),
   guardarPermisosGenerales: (iduser: string, flags: boolean[]) =>
@@ -319,7 +319,7 @@ export const RolesAPI = {
   listarUsuarios: (idperfil: number | string) =>
     api.get<RolUsuario[]>(`/roles/${idperfil}/usuarios`).then((r) => r.data),
   propagar: (idperfil: number | string, excluidos: string[]) =>
-    api.post<{ ok: boolean; propagados: number; excluidos: number }>(`/roles/${idperfil}/propagar`, { excluidos }).then((r) => r.data),
+    api.post<{ ok: boolean; propagados: number; excluidos: number; errores?: { iduser: string; mensaje: string }[]; sin_documento?: { iduser: string }[] }>(`/roles/${idperfil}/propagar`, { excluidos }).then((r) => r.data),
 };
 
 export const CatalogosAPI = {

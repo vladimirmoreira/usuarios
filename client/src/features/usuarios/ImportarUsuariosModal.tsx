@@ -10,7 +10,7 @@ import {
   type ErrorImportacion,
 } from '../../api/endpoints';
 
-interface Props { onClose: () => void; }
+interface Props { onClose: () => void; onImportado?: () => void; }
 
 /* ─── CSV parser ──────────────────────────────────────────────────────────── */
 const COLS = ['nombre', 'apellido', 'documento', 'perfil', 'idsucursal'] as const;

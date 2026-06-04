@@ -1,0 +1,40 @@
+1. Corregir rutas de base de datos en .env
+En Firebird 2.5 Linux, SYSTEM_DATABASE=usuario_system solo funciona si está en aliases.conf. Lo más seguro es usar la ruta absoluta:
+
+Primero verifica en el servidor Linux dónde están los .fdb:
+
+sudo find / -name "usuario_*.fdb" 2>/dev/null
+
+
+Luego actualiza el .env con la ruta real, por ejemplo:
+
+SYSTEM_DATABASE=/var/lib/firebird/2.5/data/usuario_system.fdb
+SERVER_DATABASE=/var/lib/firebird/2.5/data/usuario_server.fdb
+MASTER_DATABASE=/var/lib/firebird/2.5/data/usuario_master.fdb
+
+2. Instalar Node.js 22 en el servidor Linux
+# Usando NodeSource
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+node -v   # debe mostrar v22.x
+npm -v
+
+3. Copiar el proyecto al servidor
+Desde Windows (con SCP o rsync), excluyendo node_modules y el build anterior:
+# Desde PowerShell en Windows
+scp -r "C:\Users\hp\Documents\DESARROLLOS\Usuarios" usuario@12.168.192.204:/opt/usuarios
+
+O usa git si el proyecto está en un repositorio:
+
+git clone <repo-url> /opt/usuarios
+
+
+4. Instalar dependencias y compilar el frontend
+cd /opt/usuarios
+
+# Instalar todo de una vez
+npm run install:all
+
+# Compilar el frontend (genera client/dist/)
+npm --prefix client run build

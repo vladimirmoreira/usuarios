@@ -128,16 +128,16 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
           )}
           {u.sin_menu === 1 && (
             <AlertTriangle className="h-3 w-3 cursor-pointer text-amber-400"
-              title="Sin menús configurados" onClick={() => onEditar(u)} />
+              aria-label="Sin menús configurados" onClick={() => onEditar(u)} />
           )}
           {!u.documento?.trim() && (
             <AlertTriangle className="h-3 w-3 cursor-pointer text-blue-400"
-              title="Sin documento registrado" onClick={() => onEditar(u)} />
+              aria-label="Sin documento registrado" onClick={() => onEditar(u)} />
           )}
           {u.exclusion_permisos === 1 && (
             <Sliders
               className="h-3 w-3 text-amber-500"
-              title="Permisos personalizados (excluido de última propagación del rol)"
+              aria-label="Permisos personalizados (excluido de última propagación del rol)"
             />
           )}
         </div>
@@ -153,7 +153,7 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
     { id: 'documento', accessorKey: 'documento', header: 'Documento',
       filterFn: (row, columnId, filterValue) => {
         // Si el filtro es el centinela '__sin_doc__' usamos la lógica especial
-        if (filterValue === '__sin_doc__') return sinDocumentoFn(row, columnId, filterValue);
+        if (filterValue === '__sin_doc__') return sinDocumentoFn(row, columnId, filterValue, () => {});
         const val = (row.getValue(columnId) as string) ?? '';
         return val.toLowerCase().includes(String(filterValue).toLowerCase());
       },

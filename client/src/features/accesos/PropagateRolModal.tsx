@@ -140,7 +140,7 @@ export default function PropagateRolModal({ idperfil, rolNombre, onClose, onSucc
                         <div className="flex items-center gap-1 text-xs font-medium text-zinc-800 dark:text-zinc-100">
                           {u.iduser}
                           {u.exclusion_permisos === 1 && (
-                            <Sliders className="h-3 w-3 text-amber-500" title="Permisos personalizados" />
+                            <Sliders className="h-3 w-3 text-amber-500" aria-label="Permisos personalizados" />
                           )}
                         </div>
                         <div className="truncate text-[10px] text-zinc-400">{u.nombre} {u.apellido}</div>
