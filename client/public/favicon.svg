@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Fondo escudo -->
+  <path d="M16 2L4 7v9c0 7 5.4 13.1 12 14.9C22.6 29.1 28 23 28 16V7L16 2z" fill="#ea580c"/>
+  <!-- Silueta usuario -->
+  <circle cx="16" cy="13" r="4" fill="white"/>
+  <path d="M9 24c0-3.9 3.1-7 7-7s7 3.1 7 7" stroke="white" stroke-width="2" stroke-linecap="round"/>
+</svg>

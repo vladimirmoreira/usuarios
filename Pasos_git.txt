@@ -1,0 +1,15 @@
+cd "C:\Users\hp\Documents\DESARROLLOS\Usuarios"
+
+# Inicializar git si no existe
+git init
+
+# Agregar el remote
+git remote add origin https://github.com/vladimirmoreira/usuarios.git
+
+# Primer commit
+git add .
+git commit -m "feat: initial commit - Módulo Usuarios RBAC"
+
+# Subir (la rama puede ser main o master)
+git branch -M main
+git push -u origin main

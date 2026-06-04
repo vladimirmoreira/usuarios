@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700
+           dark:bg-brand-500 dark:hover:bg-brand-600;
+  }
+  .btn-ghost {
+    @apply btn text-zinc-600 hover:bg-zinc-100
+           dark:text-zinc-300 dark:hover:bg-zinc-700;
+  }
+  .btn-outline {
+    @apply btn border border-zinc-200 bg-white hover:bg-zinc-50
+           dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700;
+  }
+  .card {
+    @apply rounded-xl border border-zinc-200 bg-white shadow-sm
+           dark:border-zinc-700 dark:bg-zinc-800;
+  }
+  .input {
+    @apply w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900
+           focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100;
+  }
+  .label { @apply text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400; }
+}
+
+@layer utilities {
+  .dark .input {
+    border-color: theme('colors.zinc.600');
+    background-color: theme('colors.zinc.800');
+    color: theme('colors.zinc.100');
+  }
+}
+
+/* ── Impresión: ocultar sidebar/header y forzar fondo claro para fichas ── */
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: white !important; color: black !important; }
+  aside, header { display: none !important; }
+  main { padding: 0 !important; background: white !important; }
+  .print\:hidden { display: none !important; }
+  .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+}

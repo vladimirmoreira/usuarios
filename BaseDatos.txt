@@ -1,0 +1,2300 @@
+Tengo dos bases de datos, los accesos debemos actualizar en el .env de acuerdo al cliente donde vaya a utilizar, ejemplo: 
+   system_empresa1    system_empresax
+   server_empresa1    server_empresax
+
+1) Base de Datos System
+Tablas:
+  Usuario
+  Usuarioempresa
+  Menu_General
+  Tipo_Usuario
+
+DDL:
+USUARIO (
+    IDUSER VARCHAR (10),
+    NOMBRE VARCHAR (25),
+    APELLIDO VARCHAR (25),
+    IDEMPRESA VARCHAR (2),
+    PASS VARCHAR (20),
+    ESTADO INTEGER,
+    FOTO BLOB sub_type 0 segment size 80,
+    IDTIPO_USUARIO INTEGER,
+    CONTROL SMALLINT,
+    DOCUMENTO VARCHAR (20),
+    EXCLUSION INTEGER)
+
+USUARIOEMPRESA (
+    IDUSER VARCHAR (10),
+    IDEMPRESA VARCHAR (2),
+    PERMISOS VARCHAR (50),
+    MOVIMIENTOS VARCHAR (20),
+    PERMISO_GG VARCHAR (50) CHARACTER SET ASCII COLLATE ASCII,
+    MENU_GG_2 VARCHAR (100) CHARACTER SET NONE COLLATE NONE)
+
+TIPO_USUARIO (
+    IDTIPO_USUARIO INTEGER NOT NULL,
+    DESCRIPCION VARCHAR (30),
+    IDUSER VARCHAR (10),
+    TIPO INTEGER,
+    ESTADO INTEGER)
+
+MENU_GENERAL (
+    IDMENU_PRINCIPAL INTEGER NOT NULL,
+    IDEMPRESA VARCHAR (2),
+    IDUSER VARCHAR (10),
+    IDMENU VARCHAR (30),
+    TITULO VARCHAR (50),
+    PERMISO SMALLINT);
+
+TMP$USUARIO_PERMISOS_GENERALES (
+    IDPERMISO INTEGER NOT NULL,
+    DESCRIPCION VARCHAR (50));
+
+TMP$USUARIO_PERMISOS_PDV (
+    IDPERMISO INTEGER NOT NULL,
+    DESCRIPCION VARCHAR (50),
+    VISIBLE SMALLINT,
+    INDICE INTEGER)
+
+
+
+Secuenciador:
+    GEN_MENU_GENERAL
+
+Datos:
+TIPO_USUARIO
+IDTIPO_USUARIO DESCRIPCION                         IDUSER           TIPO     ESTADO 
+             1 Administracion                      ADMNISTRA           0          1 
+             2 Contabilidad                        CONTABLE            0          1 
+             3 Compras                             COMPRAS             0          1 
+             4 RRHH                                RRHH                0          1 
+             5 Marketing                           MARKETING           0          1 
+             6 Operaciones                         OPERACION           0          1 
+             7 Encargado de Ventas                 VENTAS              1          1 
+             8 Vendedor-Caja                       SERVICIO            1          1 
+             9 Repartidor                          REPARTO             0          1 
+
+TMP$USUARIO_PERMISOS_GENERALES
+ IDPERMISO DESCRIPCION
+         0 Agregar
+         1 Modificar
+         2 Eliminar
+         3 Imprimir
+         4 Agregar (Ayuda en Línea)                           
+         5 Modificar (Ayuda en Línea)                         
+         6 Administrar Planes de Venta                        
+         7 Admin                                              
+         8 Ventas                                             
+         9 Cuentas Corrientes                                 
+        10 Administración de Reportes                         
+        11 Anulación Documentos                               
+        12 Control de Stock                                   
+        13 Gestor de Avisos                                   
+        14 Descuento                                          
+        15 Compras                                            
+        16 Estado Control Stock                               
+        17 Precio y Comisión                                  
+        18 Tesorería                                          
+        19 Administrador de OT                                
+        20 No Control Serie                                   
+        21 Factura Contado - AutoCobro                        
+        22 Administración de Serie                            
+        23 Supervisor de Usuarios                             
+        24 Control Estado (Doc. Legales)                      
+        25 Control Estado (Interno)                           
+        26 Administrar Libro de Bancos                        
+        27 Contabilidad                                       
+        28 Libro Banco - Conciliación                         
+        29 Modifica Cabecera Movimiento                       
+        30 Numeración Manual                                  
+        31 Control de Turno                                   
+        32 Re-imprimir Factura                                
+        33 Carga Recibos-Especial                             
+        34 Límite de Crédito                                  
+        35 Caja Ciega                                         
+        36 Administrar Producción                             
+        37 Sucursal                                           
+        38 Ver Sucursal/ Reportes                             
+
+
+TMP$USUARIO_PERMISOS_PDV
+ IDPERMISO DESCRIPCION                                           VISIBLE     INDICE 
+         3 Bloquear Sistema                                            1          0 
+         4 Salir                                                       1          1 
+         5 Salon                                                       1          2 
+         6 Delivery                                                    1          3 
+         7 Carry Out                                                   1          4 
+         8 Express                                                     1          5 
+        12 Turno                                                       1          6 
+        13 Pre-Producción                                              1          7 
+        14 KDS                                                         1          8 
+        15 Marketing                                                   1          9 
+        16 Eventos                                                     1         10 
+        17 Menu Diario                                                 1         11 
+        42 Vendedor                                                    1         12 
+        43 Mesas                                                       1         13 
+        44 Billetera                                                   1         14 
+        48 Cambio de Clave                                             1         15 
+        49 Balanza                                                     1         16 
+        50 Control de Bloqueos                                         1         17 
+
+MENU_PRINCIPAL
+IDMENU_PRINCIPAL IDEMPRESA IDUSER     IDMENU                         TITULO                                                PERMISO 
+          82.260 1         Admin      Registro1                      &Registro                                                   0 
+          82.261 1         Admin      mnuArchivoConfigImpresora      Configuración de &Impresora                                 0 
+          82.262 1         Admin      mnuArchivoBloquearSistema      Bloquear Sistema                                            1 
+          82.263 1         Admin      mnuArchivoPanelControl         Panel de Control                                            1 
+          82.264 1         Admin      mnuArchivoSalir                Salir                                                       1 
+          82.265 1         Admin      mnuStockExistenciaArticulo     E&xistencia Artículo                                        1 
+          82.266 1         Admin      mnuStockExistenciaGeneral      &Existencia General                                         1 
+          82.267 1         Admin      mnuStockListadePrecios         Lista de Precios                                            1 
+          82.268 1         Admin      mnuStockArticulos              &Articulos                                                  1 
+          82.269 1         Admin      mnuStockDefiniciones           &Definiciones                                               1 
+          82.270 1         Admin      mnuStockZona                   &Zona                                                       1 
+          82.271 1         Admin      mnuCuentasACobrar              Cuentas a &Cobrar                                           1 
+          82.272 1         Admin      mnuCuentasAPagar               Cuentas &a Pagar                                            1 
+          82.273 1         Admin      mnuAdmFacturasaVencer          Facturas a Vencer...                                        1 
+          82.274 1         Admin      mnuAdminMovimientos            &Movimientos                                                1 
+          82.275 1         Admin      mnuCuentasRecibos              &Recibos - Clientes                                         1 
+          82.276 1         Admin      menAdmOrdenPagos               &Orden de Pagos  - Proveedores                              1 
+          82.277 1         Admin      Pagare1                        &Pagares                                                    1 
+          82.278 1         Admin      PlanillasdeCaja1               Planillas de Caja                                           1 
+          82.279 1         Admin      mnuAdmMoculosLibrodeBancos     Financiero                                                  1 
+          82.280 1         Admin      GeneradordeFacturas1           &Generador de Facturas...                                   1 
+          82.281 1         Admin      mnuAdmDespachodeImportacion    Despacho de Importación                                     1 
+          82.282 1         Admin      mnuCuentasPersona              &Personas/Cuentas                                           1 
+          82.283 1         Admin      Vendedor1                      &Vendedor/Técnico/Cobrador                                  1 
+          82.284 1         Admin      mnuAdminDefiniciones           Definiciones                                                1 
+          82.285 1         Admin      mnuStockPropiedades            &Propiedades                                                1 
+          82.286 1         Admin      mnuTecnicoOrdenTrabjo          Orden de Trabajo                                            0 
+          82.287 1         Admin      Administracin1                 Administración de Proyectos                                 0 
+          82.288 1         Admin      mnuTecnicoDefiniciones         &Definiciones                                               0 
+          82.289 1         Admin      mnuLogisticaRepartos           &Repartos                                                   0 
+          82.290 1         Admin      mnuInformeMargenUtilidad       Ventas                                                      0 
+          82.291 1         Admin      mnuInformesEstadsticaVentas    Descuento de Documentos                                     0 
+          82.292 1         Admin      mnuInofrmeFlujodeCaja          Flujo de Caja                                               0 
+          82.293 1         Admin      popCheques                     Cheques                                                     0 
+          82.294 1         Admin      Cubo1                          Análisis de Datos...                                        0 
+          82.295 1         Admin      mnuRpt_1_1                     General                                                     0 
+          82.296 1         Admin      mnuRpt_1_2                     Stock                                                       0 
+          82.297 1         Admin      mnuRpt_1_3                     Planilla de Caja                                            0 
+          82.298 1         Admin      mnuRpt_1_100                   Ventas                                                      0 
+          82.299 1         Admin      mnuRpt_1_4                     Libro Fiscal                                                0 
+          82.300 1         Admin      mnuRpt_1_5                     Recibos                                                     0 
+          82.301 1         Admin      mnuRpt_1_6                     Cta. Cte.                                                   0 
+          82.302 1         Admin      mnuRpt_1_7                     Lista de Precios                                            0 
+          82.303 1         Admin      mnuRpt_1_9                     Procesos de Sucursales                                      0 
+          82.304 1         Admin      mnuRpt_1_10                    Compras                                                     0 
+          82.305 1         Admin      mnuRpt_1_11                    Procesos                                                    0 
+          82.306 1         Admin      mnuRpt_1_12                    Supervisor                                                  0 
+          82.307 1         Admin      mnuRpt_1_13                    Stock Locales                                               0 
+          82.308 1         Admin      mnuRpt_1_16                    Controles                                                   0 
+          82.309 1         Admin      mnuRpt_1_8                     A Modificar                                                 0 
+          82.310 1         Admin      mnuRpt_1_17                    Contabilidad                                                0 
+          82.311 1         Admin      mnuRpt_1_22                    Estadisticas                                                0 
+          82.312 1         Admin      mnuRpt_1_15                    Marketing                                                   0 
+          82.313 1         Admin      mnuRpt_1_21                    Gerencia                                                    0 
+          82.314 1         Admin      mnuRpt_1_23                    Produccion                                                  0 
+          82.315 1         Admin      mnuRpt_1_24                    Administracion                                              0 
+          82.316 1         Admin      mnuRpt_1_101                   Basurero                                                    0 
+          82.317 1         Admin      mnuUtilesCalculadora           &Calculadora                                                0 
+          82.318 1         Admin      mnuUtilesCalendario            C&alendario                                                 0 
+          82.319 1         Admin      mnuUtilesCambioClave           Cambio &de Clave                                            0 
+          82.320 1         Admin      popJediQuery                   Administrador de &Reportes                                  0 
+          82.321 1         Admin      mnuUtilesAnalizador            Analizador de &Consulta                                     0 
+          82.322 1         Admin      mnuUtilesAdminDatos            Administrador de &Datos                                     0 
+          82.323 1         Admin      mnuUtilesGestiondeAvisos       Administrador de &Avisos                                    0 
+          82.324 1         Admin      GeneradorSQL1                  Generador SQL                                               0 
+          82.325 1         Admin      VerificacinComisin1            Verificación Comisión                                       0 
+          82.326 1         Admin      SincronizarID1                 Replicación...                                              0 
+          82.327 1         Admin      Exportador1                    Exportador/Importador                                       0 
+          82.328 1         Admin      EnviarCorreo1                  Enviar Correo...                                            0 
+          82.329 1         Admin      ListadeRUC1                    Lista de RUC                                                0 
+          82.330 1         Admin      ConfigurarGrilla1              Configurar Grilla                                           0 
+          82.331 1         Admin      OrdendeServicio1               Orden de Servicio                                           0 
+          82.332 1         Admin      popProd_Orden                  Producción - Ordenes                                        0 
+          82.333 1         Admin      popProd_Recetas                Producción - Recetas                                        0 
+          82.334 1         Admin      Etiquetas1                     Etiquetas                                                   0 
+          82.335 1         Admin      Costo1                         Actualizacion Costo                                         0 
+          82.336 1         Admin      ProduccionEH1                  Produccion EH                                               0 
+          82.337 1         Admin      mnuCierrePropiedades           &Propiedades                                                0 
+          82.338 1         Admin      ArchivoMX1                     Archivo MX                                                  0 
+          82.339 1         Admin      ActivadorCallCenter1           Activador Call Center                                       0 
+          82.340 1         Admin      ControldeProduccionTurno       Control de Produccion/Turno                                 0 
+          82.341 1         Admin      StockTeorico                   Stock Teorico                                               0 
+          82.342 1         Admin      PlanillaProgramacion           Planilla Programacion                                       0 
+          82.343 1         Admin      CashFlow1                      Cash Flow                                                   0 
+          82.344 1         Admin      Reposicion                     Reposicion                                                  0 
+          82.345 1         Admin      mnuAdmMovimientos0             Inventario                                                  1 
+          82.346 1         Admin      mnuAdmMovimientos1             Compra                                                      1 
+          82.347 1         Admin      mnuAdmMovimientos2             Venta                                                       1 
+          82.348 1         Admin      mnuAdmMovimientos3             Ajuste                                                      1 
+          82.349 1         Admin      mnuAdmMovimientos4             Nota Credito Cliente                                        1 
+          82.350 1         Admin      mnuAdmMovimientos5             Nota Debito Cliente                                         1 
+          82.351 1         Admin      mnuAdmMovimientos6             Transferencia                                               1 
+          82.352 1         Admin      mnuAdmMovimientos7             Pedido de Venta                                             1 
+          82.353 1         Admin      mnuAdmMovimientos8             Pedido de Compra                                            1 
+          82.354 1         Admin      mnuAdmMovimientos9             Presupuesto de Venta                                        1 
+          82.355 1         Admin      mnuAdmMovimientos10            Presupuesto de Compra                                       1 
+          82.356 1         Admin      mnuAdmMovimientos11            Importacion                                                 1 
+          82.357 1         Admin      mnuAdmMovimientos12            Nota de Credito Proveedor                                   1 
+          82.358 1         Admin      mnuAdmMovimientos13            Nota de Debito Proveedor                                    1 
+          82.359 1         Admin      mnuAdmMovimientos14            Devolucion                                                  1 
+          82.360 1         Admin      mnuAdmMovimientos15            Remision Cliente                                            1 
+          82.361 1         Admin      mnuAdmMovimientos16            Remision Proveedor                                          1 
+          82.362 1         Admin      mnuPagaresalaOrden                                                                         1 
+          82.363 1         Admin      mnuPagareDeudas                                                                            1 
+          82.364 1         Admin      popAdmPlanillaCajaRendicion                                                                1 
+          82.365 1         Admin      popAdmPlanillaCajaCajaChica                                                                1 
+          82.366 1         Admin      popAdminPlanillaViaticos                                                                   1 
+          82.367 1         Admin      LibroBanco1                                                                                1 
+          82.368 1         Admin      MnuFinancieroOF                                                                            1 
+          82.369 1         Admin      DespachoGeeral1                                                                            1 
+          82.370 1         Admin      DespachoDesglosado1                                                                        1 
+          82.371 1         Admin      ImportacionEmbarque                                                                        1 
+          82.372 1         Admin      Cuentas1                                                                                   1 
+          82.373 1         Admin      Cambio1                                                                                    1 
+          82.374 1         Admin      CambioOficial1                                                                             1 
+          82.375 1         Admin      Morosos1                                                                                   1 
+          82.376 1         Admin      popCfgValoresvarios                                                                        1 
+          82.377 1         Admin      ValoresdeConfig1                                                                           0 
+          82.378 1         Admin      OpcionesdeServicios1                                                                       0 
+          82.379 1         Admin      GruposOT1                                                                                  0 
+          82.380 1         Admin      TipoProyecto1                                                                              0 
+          82.381 1         Admin      TipoDocumento1                                                                             0 
+          82.382 1         Admin      UsuarioProyecto1                                                                           0 
+          82.383 1         Admin      MargendeUtilidad1                                                                          0 
+          82.384 1         Admin      ObjetivosdeVentas1                                                                         0 
+          82.385 1         Admin      PaneldeControl1                                                                            0 
+          82.386 1         Admin      Presupuesto1                                                                               0 
+          82.387 1         Admin      AdministracindeRecetas1                                                                    0 
+          82.388 1         Admin      SimuladordeRecetas1                                                                        0 
+          82.389 1         Admin      Etiqueta1                                                                                  0 
+          82.390 1         Admin      Etiqueta2                                                                                  0 
+         101.370 1         Admin      mnuRpt__1                      General                                                     0 
+         101.371 1         Admin      mnuRpt__2                      Stock                                                       0 
+         101.372 1         Admin      mnuRpt__3                      Planilla de Caja                                            0 
+         101.373 1         Admin      mnuRpt__100                    Ventas                                                      0 
+         101.374 1         Admin      mnuRpt__4                      Libro Fiscal                                                0 
+         101.375 1         Admin      mnuRpt__5                      Recibos                                                     0 
+         101.376 1         Admin      mnuRpt__6                      Cta. Cte.                                                   0 
+         101.377 1         Admin      mnuRpt__7                      Lista de Precios                                            0 
+         101.378 1         Admin      mnuRpt__9                      Procesos de Sucursales                                      0 
+         101.379 1         Admin      mnuRpt__10                     Compras                                                     0 
+         101.380 1         Admin      mnuRpt__11                     Procesos                                                    0 
+         101.381 1         Admin      mnuRpt__12                     Supervisor                                                  0 
+         101.382 1         Admin      mnuRpt__13                     Stock Locales                                               0 
+         101.383 1         Admin      mnuRpt__16                     Controles                                                   0 
+         101.384 1         Admin      mnuRpt__8                      A Modificar                                                 0 
+         101.385 1         Admin      mnuRpt__17                     Contabilidad                                                0 
+         101.386 1         Admin      mnuRpt__22                     Estadisticas                                                0 
+         101.387 1         Admin      mnuRpt__15                     Marketing                                                   0 
+         101.388 1         Admin      mnuRpt__21                     Gerencia                                                    0 
+         101.389 1         Admin      mnuRpt__23                     Produccion                                                  0 
+         101.390 1         Admin      mnuRpt__24                     Administracion                                              0 
+         101.391 1         Admin      mnuRpt__101                    Basurero                                                    0 
+         101.392 1         Admin      mnuRpt__1                                                                                  0 
+         101.393 1         Admin      mnuRpt__2                                                                                  0 
+         101.394 1         Admin      mnuRpt__3                                                                                  0 
+         101.395 1         Admin      mnuRpt__100                                                                                0 
+         101.396 1         Admin      mnuRpt__4                                                                                  0 
+         101.397 1         Admin      mnuRpt__5                                                                                  0 
+         101.398 1         Admin      mnuRpt__6                                                                                  0 
+         101.399 1         Admin      mnuRpt__7                                                                                  0 
+         101.400 1         Admin      mnuRpt__9                                                                                  0 
+         101.401 1         Admin      mnuRpt__10                                                                                 0 
+         101.402 1         Admin      mnuRpt__11                                                                                 0 
+         101.403 1         Admin      mnuRpt__12                                                                                 0 
+         101.404 1         Admin      mnuRpt__13                                                                                 0 
+         101.405 1         Admin      mnuRpt__16                                                                                 0 
+         101.406 1         Admin      mnuRpt__8                                                                                  0 
+         101.407 1         Admin      mnuRpt__17                                                                                 0 
+         101.408 1         Admin      mnuRpt__22                                                                                 0 
+         101.409 1         Admin      mnuRpt__15                                                                                 0 
+         101.410 1         Admin      mnuRpt__21                                                                                 0 
+         101.411 1         Admin      mnuRpt__23                                                                                 0 
+         101.412 1         Admin      mnuRpt__24                                                                                 0 
+         101.413 1         Admin      mnuRpt__101                                                                                0 
+         110.652 1         Admin      popPlanilladeCajaImpresion                                                                 0 
+
+Obs: Aqui manda el idmenu (y el campo permiso delimita si el usuario tiene o no activado el permiso), siempre serán estos registros para cualqueir usuario, es decir rellenar con permiso 0 en caso que no tenga activado.
+
+/*Modelo SP propuesto, pero podria mejorar el enfoque*/
+CREATE PROCEDURE PCD_USUARIO (
+    USUARIO VARCHAR (10),
+    IDPERFIL INTEGER,
+    NOMBRE VARCHAR (25),
+    APELLIDO VARCHAR (25),
+    DOCUMENTO VARCHAR (20),
+    CONTROL INTEGER,
+    RPT_USER VARCHAR (10))
+RETURNS (
+    MENSAJE VARCHAR (50))
+AS/**/
+DECLARE VARIABLE IDUSER_PERFIL VARCHAR(10);
+DECLARE VARIABLE TIPO_PERFIL INTEGER;
+DECLARE VARIABLE ESTADO_PERFIL INTEGER;
+DECLARE VARIABLE SENTENCIA VARCHAR(350);
+DECLARE VARIABLE IP VARCHAR(15);
+DECLARE VARIABLE SERVER VARCHAR(100);
+DECLARE VARIABLE MASTER VARCHAR(100);
+DECLARE VARIABLE USER_BD VARCHAR(10);
+DECLARE VARIABLE CLAVE VARCHAR(20);
+DECLARE VARIABLE EXISTE_PERMISO INTEGER;
+BEGIN
+/*Obtenemos datos de la BD Server*/
+  SELECT
+    FIRST 1
+    IP,
+    SERVER,
+    MASTER,
+    USER_BD,
+    CLAVE
+  FROM
+    CONFIGURACION_USUARIO
+  INTO
+    :IP,
+    :SERVER,
+    :MASTER,
+    :USER_BD,
+    :CLAVE;
+
+/*Validaciones del Perfil de usuario*/
+  select
+    first 1
+    iduser,
+    tipo,
+    estado
+  from
+    TIPO_USUARIO
+  where
+    idtipo_usuario = :idperfil
+  into
+    :iduser_perfil, :tipo_perfil, :estado_perfil;
+
+  if (:iduser_perfil is null) then
+  begin
+    Mensaje = '1> Usuario del perfil no esta configurado';
+    suspend; exit;
+  end
+  else
+  begin
+    if (:tipo_perfil not in(0,1,2)) then
+    begin
+      Mensaje = '2> El tipo de Perfil de usuario no esta configurado';
+      suspend; exit;
+    end
+
+    if (:estado_perfil <> 1) then
+    begin
+      Mensaje = '3> El estado del perfil se encuentra inactivo';
+      suspend; exit;
+    end
+
+    if (not exists(select * from usuario where iduser = :iduser_perfil)) then
+    begin
+      Mensaje = '4> Usuario no existe para el perfil elegido';
+      suspend; exit;
+    end
+    else
+    begin
+      if ((select estado from usuario where iduser = :iduser_perfil) <> 1) then
+      begin
+        Mensaje = '5> El Usuario del perfil elegido no esta activo';
+        suspend; exit;
+      end
+    end
+  end
+
+  if (:tipo_perfil = 0) then
+  begin
+    if (not exists(select * from usuarioempresa where iduser = :iduser_perfil and permisos like '%S%')) then
+    begin
+      Mensaje = '6> Falta configuracion de permisos en Modulo Gestion Empresarial';
+      suspend; exit;
+    end
+
+    if (not exists(select * from menu_general where iduser = :iduser_perfil and permiso = 1)) then
+    begin
+      Mensaje = '7> Falta configuracion de menu_general en Modulo Gestion Empresarial';
+      suspend; exit;
+    end
+  end
+  else
+  if (:tipo_perfil = 1) then
+  begin
+    if (not exists(select * from usuarioempresa where menu_gg_2 like '%1%')) then
+    begin
+      Mensaje = '8> Falta configuracion Modulo POS';
+      suspend; exit;
+    end
+  end
+  else
+  if (:tipo_perfil = 2) then
+  begin
+    SENTENCIA = 'select count(*) from usuarioempresa where iduser = ? and permisos like "S"';
+
+    FOR
+    EXECUTE STATEMENT
+     (SENTENCIA)
+     (IDUSER_PERFIL)
+    ON EXTERNAL
+     :IP||':'||:MASTER
+    AS
+     USER     :USER_BD
+     PASSWORD :CLAVE
+    WITH AUTONOMOUS TRANSACTION
+    INTO
+      :EXISTE_PERMISO
+    DO
+    BEGIN
+      IF (:EXISTE_PERMISO = 0) THEN
+      BEGIN
+        Mensaje = '9> No existe permisos para el Modulo de Contabilidad / Talento Humano';
+        suspend; exit;
+      END
+    END
+  end
+
+  if (exists(select * from usuario where iduser = :usuario)) then
+  begin
+    Mensaje = '10> Ya existe usuario, imposible duplicarlo';
+    suspend; exit;
+  end
+
+  if (exists(select * from usuarioempresa where iduser = :usuario)) then
+  begin
+    Mensaje = '11> Ya existe usuario asignado a una empresa';
+    suspend; exit;
+  end
+
+  if (exists(select * from menu_general where iduser = :usuario)) then
+  begin
+    Mensaje = '12> Ya existe usuario asignado en Menu General';
+    suspend; exit;
+  end
+
+  if (exists(select * from usuario where iduser = :usuario and documento = :documento)) then
+  begin
+    Mensaje = '13> Numero de documento ya existe, proceda a buscarlo por documento primeramente, considere estado inactivo o bloqueado';
+    suspend; exit;
+  end
+
+/* Agregar usuario */
+  in autonomous transaction do
+  insert into
+    usuario(
+    iduser,
+    nombre,
+    apellido,
+    pass,
+    estado,
+    idempresa,
+    idtipo_usuario,
+    documento,
+    control)
+  values(
+    :usuario,
+    :nombre,
+    :apellido,
+    :documento,
+    1,
+    1,
+    :idperfil,
+    :documento,
+    1);
+
+   SENTENCIA = 'INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)' ||
+   ' VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),?, 1, CAST("NOW" AS DATE),?,"Alta de Usuario")';
+
+  EXECUTE STATEMENT
+    (SENTENCIA)
+    (USUARIO,RPT_USER)
+  ON EXTERNAL
+    :IP||':'||:SERVER
+  AS
+    USER     :USER_BD
+    PASSWORD :CLAVE
+  WITH AUTONOMOUS TRANSACTION;
+
+/* Agregar usuarioempresa */
+  in autonomous transaction do
+  insert into
+    usuarioempresa(
+    iduser,
+    idempresa,
+    permisos,
+    movimientos,
+    modo_print,
+    talonario,
+    menu_gg_2,
+    permiso_gg)
+  select
+    :usuario,
+    1,
+    use.permisos,
+    use.movimientos,
+    use.modo_print,
+    use.talonario,
+    use.menu_gg_2,
+    use.permiso_gg
+  from
+    usuarioempresa use
+  where
+    use.iduser = :iduser_perfil;
+
+   SENTENCIA = 'INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)' ||
+   ' VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),?, 1, CAST("NOW" AS DATE),?,"Alta de Usuario-Empresa")';
+
+  EXECUTE STATEMENT
+    (SENTENCIA)
+    (USUARIO,RPT_USER)
+  ON EXTERNAL
+    :IP||':'||:SERVER
+  AS
+    USER     :USER_BD
+    PASSWORD :CLAVE
+  WITH AUTONOMOUS TRANSACTION;
+
+/* Menu */
+  in autonomous transaction do
+  insert into
+    menu_general (
+    idmenu_principal,
+    idempresa,
+    iduser,
+    idmenu,
+    titulo,
+    permiso)
+  select
+    gen_id(gen_menu_general,1),
+    men.idempresa,
+    :usuario,
+    men.idmenu,
+    men.titulo,
+    men.permiso
+  from
+    menu_general men
+  where
+    men.iduser = :iduser_perfil;
+
+  SENTENCIA = 'INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)' ||
+   ' VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),?, 1, CAST("NOW" AS DATE),?,"Alta de Usuario-Menu")';
+
+  EXECUTE STATEMENT
+    (SENTENCIA)
+    (USUARIO,RPT_USER)
+  ON EXTERNAL
+    :IP||':'||:SERVER
+  AS
+    USER     :USER_BD
+    PASSWORD :CLAVE
+  WITH AUTONOMOUS TRANSACTION;
+
+  MENSAJE = 'EXITOSO';
+  SUSPEND;
+END
+
+Obs:
+Todo parte de los roles (tipo_usuario), alli en el campo iduser tenemos los usuarios o roles respectivos.
+
+2) Base de Datos Server
+
+
+DDL
+HISTORIAL_USUARIO (
+    ID INTEGER NOT NULL,
+    USUARIO VARCHAR (10),
+    IDOPERACION INTEGER NOT NULL,
+    FECHA DATE NOT NULL,
+    AUTORIZACION VARCHAR (10),
+    OBSERVACION BLOB sub_type 1 segment size 80)
+
+TIPO_OPERACION (
+    IDTIPO_OPERACION INTEGER NOT NULL,
+    DESCRIPCION VARCHAR (50))
+
+CONFIGURACION_USUARIO (
+    IP VARCHAR (15),
+    SERVER VARCHAR (100),
+    SYSTEM VARCHAR (100),
+    USER_BD VARCHAR (10),
+    CLAVE VARCHAR (20),
+    LEGAJO SMALLINT,
+    BIOMETRICO SMALLINT,
+    GASTRONOMIA SMALLINT,
+    MAXIMO INTEGER,
+    VERSION_NRO VARCHAR (10),
+    COMPLEMENTARIO SMALLINT,
+    RUTA_ARCHIVO VARCHAR (100),
+    MIGRACION SMALLINT)
+
+Datos:
+TIPO_OPERACION
+IDTIPO_OPERACION DESCRIPCION                                        
+               1 Alta de Usuario                                    
+               2 Baja de Usuario                                    
+               3 Reinicio de Clave                                  
+               4 Eliminación de Huella                              
+               5 Reasignación de Sucursal                           
+               6 Cambio de Perfil                                   
+               7 Actualización de Cuenta                            
+               8 Vinculación con Legajo                             
+               9 Exclusion de Cuenta                                
+              10 Migración de Datos                                 
+              11 Re-Activar Cuenta                                  
+
+
+sp:
+CREATE PROCEDURE PCD_USUARIO (
+    USUARIO VARCHAR (10),
+    NOMBRE VARCHAR (25),
+    APELLIDO VARCHAR (25),
+    DOCUMENTO VARCHAR (20),
+    IDPERFIL INTEGER,
+    IDSUCURSAL INTEGER,
+    FOTO BLOB sub_type 0 segment size 80,
+    RPT_USER VARCHAR (10))
+RETURNS (
+    MENSAJE VARCHAR (200))
+AS
+DECLARE VARIABLE SENTENCIA VARCHAR(350);
+DECLARE VARIABLE IP VARCHAR(15);
+DECLARE VARIABLE SYSTEM VARCHAR(100);
+DECLARE VARIABLE USER_BD VARCHAR(10);
+DECLARE VARIABLE CLAVE VARCHAR(20);
+DECLARE VARIABLE CARGO VARCHAR(150);
+BEGIN
+/* Inicializamos variables ---------------------------------------------------*/
+  ip      = '';
+  system  = '';
+  user_bd = '';
+  clave   = '';
+  MENSAJE = 'EXITOSO';
+  cargo   = '';
+
+/* Verificamos previamente si existe USUARIO en tablas de Gestion Empresarial */
+  if (exists(select * from gg_mesero where iduser = :USUARIO)) then
+  begin
+    Mensaje = 'Ya existe USUARIO como Vendedor en Modulo Punto de Ventas';
+    suspend; exit;
+  end
+
+  if (exists(select * from usuario_sucursal where iduser = :USUARIO)) then
+  begin
+    Mensaje = 'Ya existe USUARIO asignado a Sucursal';
+    suspend; exit;
+  end
+
+  if (exists(select * from usuario_deposito where iduser = :USUARIO)) then
+  begin
+    Mensaje = 'Ya existe USUARIO asignado a Deposito de Salida';
+    suspend; exit;
+  end
+
+  if (exists(select * from usuario_deposito1 where iduser = :USUARIO)) then
+  begin
+    Mensaje = 'Ya existe USUARIO asignado a Deposito de Entrada';
+    suspend; exit;
+  end
+
+  if (exists(select * from usuario_concepto where iduser = :USUARIO)) then
+  begin
+    Mensaje = 'Ya existe USUARIO asignado a Concepto de Movimientos';
+    suspend; exit;
+  end
+
+  if (exists(select * from rh_cargo where user_system = :USUARIO)) then
+  begin
+    select
+      ('Codigo Cargo ['||idcargo||'], '||persona) as cargo
+    from(
+         select
+           first 1
+           car.user_system,
+           car.idcargo,
+          ('Personal: ['||car.idpersona||'] '||per.persona) as persona
+         from
+           rh_cargo car
+         inner join
+           rh_persona per
+           on (per.idpersona = car.idpersona)
+         )
+    (user_system, idcargo, persona)
+    into
+      :cargo;
+
+    Mensaje = 'Ya existe USUARIO asignado al '|| :cargo;
+    suspend; exit;
+  end
+
+/*Obtenemos datos de la BD System*/
+  SELECT
+    FIRST 1
+    IP,
+    SYSTEM,
+    USER_BD,
+    CLAVE
+  FROM
+    CONFIGURACION_USUARIO
+  INTO
+    :IP,
+    :SYSTEM,
+    :USER_BD,
+    :CLAVE;
+
+  SENTENCIA = 'SELECT MENSAJE FROM PCD_USUARIO(?,?,?,?,?,1,?);';
+
+  EXECUTE STATEMENT
+    (SENTENCIA)
+    (USUARIO,IDPERFIL,NOMBRE,APELLIDO,DOCUMENTO,RPT_USER)
+  ON EXTERNAL
+    :IP||':'||:SYSTEM
+  AS
+    USER     :USER_BD
+    PASSWORD :CLAVE
+  WITH AUTONOMOUS TRANSACTION
+  INTO
+    :MENSAJE;
+
+  IF (:MENSAJE <> 'EXITOSO') THEN
+  BEGIN
+    SUSPEND;
+    EXIT;
+  END
+  ELSE
+  BEGIN
+
+    SELECT
+      MENSAJE
+    FROM
+      PCD_OPERACIONES(
+      :USUARIO,
+      1,
+      :RPT_USER,
+      :IDSUCURSAL,
+      :IDPERFIL,
+      :NOMBRE,
+      :APELLIDO,
+      :DOCUMENTO,
+      NULL) /*FOTO*/
+    INTO
+      :MENSAJE;
+
+  END
+
+  SUSPEND;
+
+END
+
+
+
+
+
+
+
+CREATE PROCEDURE PCD_OPERACIONES (
+    USUARIO VARCHAR (10),
+    IDOPERACION INTEGER,
+    RPT_USER VARCHAR (10),
+    IDSUCURSAL INTEGER,
+    IDPERFIL INTEGER,
+    NOMBRE VARCHAR (30),
+    APELLIDO VARCHAR (30),
+    DOCUMENTO VARCHAR (20),
+    FOTO BLOB sub_type 0 segment size 80)
+RETURNS (
+    MENSAJE VARCHAR (100))
+AS
+DECLARE VARIABLE EXISTE SMALLINT;
+DECLARE VARIABLE ESTADO SMALLINT;
+DECLARE VARIABLE LEGAJO SMALLINT;
+DECLARE VARIABLE BIOMETRICO SMALLINT;
+DECLARE VARIABLE GASTRONOMIA SMALLINT;
+DECLARE VARIABLE DEPOSITO_SALIDA INTEGER;
+DECLARE VARIABLE DEPOSITO_ENTRADA INTEGER;
+DECLARE VARIABLE RESULTADO VARCHAR(100);
+DECLARE VARIABLE IP VARCHAR(15);
+DECLARE VARIABLE SYSTEM VARCHAR(100);
+DECLARE VARIABLE USER_BD VARCHAR(10);
+DECLARE VARIABLE CLAVE VARCHAR(20);
+DECLARE VARIABLE IDPERSONA INTEGER;
+DECLARE VARIABLE IDCARGO INTEGER;
+DECLARE VARIABLE IDUSER_PERFIL VARCHAR(10);
+DECLARE VARIABLE IDDEPOSITO INTEGER;
+DECLARE VARIABLE CLAVE_PDV VARCHAR(20);
+DECLARE VARIABLE TIPO INTEGER;
+DECLARE VARIABLE DOCUMENTO_SYSTEM VARCHAR(20);
+
+DECLARE VARIABLE REPLICA_PERSONA INTEGER;
+DECLARE VARIABLE REPLICA_CARGO INTEGER;
+DECLARE VARIABLE REPLICA_DPTO INTEGER;
+DECLARE VARIABLE REPLICA_PROFESION INTEGER;
+DECLARE VARIABLE REPLICA_CIUDAD_NAC INTEGER;
+DECLARE VARIABLE REPLICA_PAIS INTEGER;
+DECLARE VARIABLE REPLICA_CIUDAD INTEGER;
+DECLARE VARIABLE REPLICA_BARRIO INTEGER;
+DECLARE VARIABLE REPLICA_ESTUDIO INTEGER;
+DECLARE VARIABLE REPLICA_MESERO INTEGER;
+
+DECLARE VARIABLE SQL_PERSONA VARCHAR(1000);
+DECLARE VARIABLE SQL_CARGO VARCHAR(1000);
+DECLARE VARIABLE SQL_DPTO VARCHAR(1000);
+DECLARE VARIABLE SQL_PROFESION VARCHAR(1000);
+DECLARE VARIABLE SQL_CIUDAD_NAC VARCHAR(1000);
+DECLARE VARIABLE SQL_PAIS VARCHAR(1000);
+DECLARE VARIABLE SQL_CIUDAD VARCHAR(1000);
+DECLARE VARIABLE SQL_BARRIO VARCHAR(1000);
+DECLARE VARIABLE SQL_ESTUDIO VARCHAR(1000);
+DECLARE VARIABLE SQL_MESERO VARCHAR(1000);
+
+DECLARE VARIABLE SQL_SUCURSAL VARCHAR(1000);
+DECLARE VARIABLE SQL_DEPOSITO VARCHAR(1000);
+DECLARE VARIABLE SQL_DEPOSITO1 VARCHAR(1000);
+DECLARE VARIABLE SQL_CONCEPTO VARCHAR(1000);
+
+DECLARE VARIABLE IP_DESTINO VARCHAR(15);
+DECLARE VARIABLE DBASE_DESTINO VARCHAR(100);
+DECLARE VARIABLE SYSTEM_DESTINO VARCHAR(100);
+DECLARE VARIABLE USER_DESTINO VARCHAR(10);
+DECLARE VARIABLE PASS_DESTINO VARCHAR(20);
+DECLARE VARIABLE ESTADO_ERR INTEGER;
+DECLARE VARIABLE CODE_ERR VARCHAR (20);
+
+DECLARE VARIABLE ORDEN INTEGER;
+DECLARE VARIABLE USUARIO_SUCURSAL INTEGER;
+DECLARE VARIABLE IDDEP_SALIDA INTEGER;
+DECLARE VARIABLE IDDEP_ENTRADA INTEGER;
+DECLARE VARIABLE IDTIPOMOVIMIENTO INTEGER;
+DECLARE VARIABLE PERMISO INTEGER;
+DECLARE VARIABLE IDTALONARIO INTEGER;
+DECLARE VARIABLE PERMISO_VARIOS VARCHAR (20);
+DECLARE VARIABLE IDVENDEDOR INTEGER;
+DECLARE VARIABLE IDPERSONA_CONCEPTO INTEGER;
+DECLARE VARIABLE IDPLANVENTA INTEGER;
+DECLARE VARIABLE IDCONDICION INTEGER;
+
+DECLARE VARIABLE SQL_MIGRACION VARCHAR(2000);
+DECLARE VARIABLE MIGRACION_USUARIO VARCHAR(2000);
+BEGIN 
+/* Inicializamos variables ---------------------------------------------------*/
+  ip      = '';
+  system  = '';
+  user_bd = '';
+  clave   = '';
+  MENSAJE = '';
+
+  SELECT
+    FIRST 1 IP, SYSTEM, USER_BD, CLAVE, LEGAJO, BIOMETRICO, GASTRONOMIA
+  FROM
+    CONFIGURACION_USUARIO
+  INTO
+    :IP, :SYSTEM, USER_BD, :CLAVE, :LEGAJO, :BIOMETRICO, :GASTRONOMIA;
+
+/* Verificamos que exista usuario --------------------------------------------*/
+  EXECUTE STATEMENT
+    ('SELECT COUNT(*) FROM USUARIO WHERE IDUSER = ?')
+    (USUARIO)
+  ON EXTERNAL
+    :IP||':'||:SYSTEM
+  AS
+    USER     :USER_BD
+    PASSWORD :CLAVE
+  INTO
+    :EXISTE;
+
+  IF (:EXISTE = 0) THEN
+  BEGIN
+    MENSAJE = 'No existe el USUARIO';
+    SUSPEND;
+    EXIT;
+  END
+
+/* Verificamos ESTADO del usuario -----> Ejecucion en simultaneo--------------*/
+  EXECUTE STATEMENT
+    ('SELECT FIRST 1 ESTADO FROM USUARIO WHERE IDUSER = ?')
+    (USUARIO)
+  ON EXTERNAL
+    :IP||':'||:SYSTEM
+  AS
+    USER     :USER_BD
+    PASSWORD :CLAVE
+  WITH AUTONOMOUS TRANSACTION
+  INTO
+    :ESTADO;
+
+  IF (:ESTADO = 0 AND :IDOPERACION <> 11) THEN
+  BEGIN
+    MENSAJE = 'El usuario ya esta inactivo';
+    SUSPEND; EXIT;
+  END
+  ELSE
+  IF (:ESTADO IS NULL) THEN
+  BEGIN
+    MENSAJE = 'Estado nulo';
+    SUSPEND; EXIT;
+  END
+  ELSE
+  BEGIN
+
+/* Ejecutamos Operaciones ----------------------------------------------------*/
+    EXECUTE STATEMENT
+      ('SELECT FIRST 1 DOCUMENTO FROM USUARIO WHERE IDUSER = ?')
+      (USUARIO)
+    ON EXTERNAL
+      :IP||':'||:SYSTEM
+    AS
+      USER     :USER_BD
+      PASSWORD :CLAVE
+    WITH AUTONOMOUS TRANSACTION
+    INTO
+      :DOCUMENTO_SYSTEM;
+  END
+
+/* #1 Alta Usuario -----------------------------------------------------------*/
+    IF (:IDOPERACION = 1) THEN
+    BEGIN
+
+      /*Validamos parametros de entrada */
+      execute statement
+        ('select count(*) from tipo_usuario where idtipo_usuario = ? and coalesce(estado,0) = 1')
+        (idperfil)
+      on external
+        :ip || ':' || :system
+      as
+        user :user_bd
+        password :clave
+      WITH AUTONOMOUS TRANSACTION
+      into
+        :existe;
+
+      /*Buscamos el usuario del perfil elegido*/
+      if (:existe <> 0) then
+      begin
+        execute statement
+          ('select iduser, tipo from tipo_usuario where idtipo_usuario = ? and coalesce(estado,0) = 1')
+          (idperfil)
+        on external
+          :ip || ':' || :system
+        as
+          user :user_bd
+          password :clave
+        WITH AUTONOMOUS TRANSACTION
+        into
+          :iduser_perfil, :tipo;
+
+        if (strlen(:iduser_perfil) = 0) then
+        begin
+          mensaje = 'Usuario de Perfil no configurado';
+          suspend; exit;
+        end
+      end
+
+    /*Alta Usuario_Sucursal*/
+    in autonomous transaction do
+    insert into
+      usuario_sucursal (
+      iduser,
+      idsucursal,
+      orden)
+    select
+      :usuario,
+      suc.idsucursal,
+     (case when suc.idsucursal = :idsucursal then 1 else 2 end)
+    from
+      usuario_sucursal suc
+    where
+      suc.iduser = :iduser_perfil
+      and suc.idsucursal in(select idsucursal from sucursal where coalesce(estado,0) = 1);
+
+    in autonomous transaction do
+    INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+    VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 1, CAST('NOW' AS DATE),:RPT_USER,'Alta Sucursal');
+
+    /*Alta Usuario_Deposito*/
+    iddeposito = (select first 1 iddeposito from deposito where coalesce(estado,0) = 1 and coalesce(principal,0) = 1 and idsucursal = :idsucursal);
+
+    in autonomous transaction do
+    insert into
+      usuario_deposito (
+      iduser,
+      iddeposito,
+      orden)
+    select
+      :usuario,
+      dep.iddeposito,
+      (case when dep.iddeposito = :iddeposito then 1 else 2 end)
+    from
+      usuario_deposito dep
+    where
+      dep.iduser = :iduser_perfil
+      and dep.iddeposito in(select iddeposito from deposito where coalesce(estado,0) = 1);
+
+   in autonomous transaction do
+    INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+    VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 1, CAST('NOW' AS DATE),:RPT_USER,'Alta Deposito Salida');
+
+    in autonomous transaction do
+    insert into
+      usuario_deposito1 (
+      iduser,
+      iddeposito,
+      orden)
+    select
+      :usuario,
+      dep.iddeposito,
+      (case when dep.iddeposito = :iddeposito then 1 else 2 end)
+    from
+      usuario_deposito1 dep
+    where
+      dep.iduser = :iduser_perfil
+      and dep.iddeposito in(select iddeposito from deposito where coalesce(estado,0) = 1);
+
+   in autonomous transaction do
+    INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+    VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 1, CAST('NOW' AS DATE),:RPT_USER,'Alta Deposito Entrada');
+
+    /*Alta Usuario_Concepto*/
+    in autonomous transaction do
+    insert into
+      usuario_concepto (
+      iduser,
+      idtipomovimiento,
+      permiso,
+      idtalonario,
+      permiso_varios,
+      idvendedor,
+      idpersona,
+      idplanventa,
+      idcondicion)
+    select
+      :usuario,
+      cpt.idtipomovimiento,
+      cpt.permiso,
+      cpt.idtalonario,
+      cpt.permiso_varios,
+      cpt.idvendedor,
+      cpt.idpersona,
+      cpt.idplanventa,
+      cpt.idcondicion
+    from
+      usuario_concepto cpt
+    where
+      cpt.iduser = :iduser_perfil;
+
+    in autonomous transaction do
+    INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+    VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 1, CAST('NOW' AS DATE),:RPT_USER,'Alta Conceptos');
+
+      IF (:LEGAJO = 1) THEN
+      BEGIN
+        SELECT MAX(IDCARGO) FROM RH_CARGO WHERE ESTADO = 1 AND IDPERSONA IN(
+        SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO)
+        INTO :IDCARGO;
+
+        IF (COALESCE(:IDCARGO,0) <> 0) THEN
+        BEGIN
+          in autonomous transaction do
+          UPDATE RH_CARGO SET USER_SYSTEM = :USUARIO WHERE IDCARGO = :IDCARGO;
+
+          in autonomous transaction do
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 1, CAST('NOW' AS DATE),:RPT_USER,'Asigna Usuario a Cargo');
+        END
+      END
+
+      IF (:GASTRONOMIA = 1) THEN
+      BEGIN
+
+        IF (:TIPO = 1) THEN
+        BEGIN
+
+          SELECT MAX(IDCARGO), IDPERSONA FROM RH_CARGO WHERE ESTADO = 1 AND IDPERSONA IN(
+          SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO)
+          GROUP BY IDPERSONA
+          INTO :IDCARGO, :IDPERSONA;
+
+          in autonomous transaction do
+          INSERT INTO
+            GG_MESERO(
+            IDMESERO,
+            NOMBRE,
+            APELLIDO,
+            NRODOCUMENTO,
+            ESTADO,
+            CLAVE,
+            IDTIPO_MESERO,
+            RH_IDPERSONA,
+            IDSUCURSAL,
+            IDUSER,
+            IDCARGO,
+            CAJERO,
+            EXTERNO)
+          VALUES(
+            GEN_ID(GEN_GG_MESERO,1),
+            :NOMBRE,
+            :APELLIDO,
+            :DOCUMENTO,
+            1,
+            :DOCUMENTO,
+            DECODE(:IDPERFIL,7,3,8,1,10,1,6,3),
+            COALESCE(:IDPERSONA,NULL),
+            :IDSUCURSAL,
+            :USUARIO,
+            COALESCE(:IDCARGO, NULL),
+            1,
+            0);
+
+            in autonomous transaction do
+            INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+            VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 1, CAST('NOW' AS DATE),:RPT_USER,'Creacion de mesero exitoso');
+        END
+      END
+
+      MENSAJE = 'EXITOSO';
+
+    END
+    ELSE
+/* #2 Baja Usuario -----------------------------------------------------------*/
+    IF (:IDOPERACION = 2) THEN
+    BEGIN
+      -- Usuario
+      EXECUTE STATEMENT
+        ('UPDATE USUARIO SET ESTADO = 0 WHERE ESTADO <> 0 AND IDUSER = ?')
+        (USUARIO)
+      ON EXTERNAL
+        :IP||':'||:SYSTEM
+      AS
+        USER     :USER_BD
+        PASSWORD :CLAVE
+      WITH AUTONOMOUS TRANSACTION;
+
+      in autonomous transaction do
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 2, CAST('NOW' AS DATE),:RPT_USER,'Inactivacion de usuario exitoso');
+
+      IF (:GASTRONOMIA = 1) THEN -- Mesero
+      BEGIN
+        IF (EXISTS(SELECT * FROM GG_MESERO WHERE ESTADO <> 0 AND IDUSER = :USUARIO)) THEN
+        BEGIN
+          in autonomous transaction do
+          UPDATE GG_MESERO SET ESTADO = 0 WHERE ESTADO <> 0 AND IDUSER = :USUARIO;
+
+          IN AUTONOMOUS TRANSACTION DO
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 2, CAST('NOW' AS DATE),:RPT_USER,'Inactivacion de usuario PDV exitoso');
+        END
+      END
+
+      IF (:BIOMETRICO = 1) THEN -- Eliminar huella de acceso
+      BEGIN
+        IF (EXISTS(SELECT * FROM RH_CARGO_BIO WHERE IDCARGO IN(
+            SELECT IDCARGO FROM RH_CARGO WHERE IDPERSONA IN(
+            SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO)))) THEN
+        BEGIN
+          in autonomous transaction do
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          SELECT GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 2, CAST('NOW' AS DATE),:RPT_USER, 'Eliminacion de huella exitoso, cargoID:'||IDCARGO
+          FROM RH_CARGO_BIO WHERE IDCARGO IN(
+          SELECT IDCARGO FROM RH_CARGO WHERE IDPERSONA IN(
+          SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO));
+
+          in autonomous transaction do
+          DELETE FROM RH_CARGO_BIO WHERE IDCARGO IN(
+          SELECT IDCARGO FROM RH_CARGO WHERE IDPERSONA IN(
+          SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO));
+        END
+      END
+          /*
+          DELETE FROM RH_CARGO_BIO WHERE IDCARGO IN(
+          SELECT IDCARGO FROM RH_CARGO WHERE USER_SYSTEM = :USUARIO);
+          */
+
+      MENSAJE = '2';
+
+    END
+-- #3 Reiniciar Clave ----------------------------------------------------------
+    ELSE
+    IF (:IDOPERACION = 3) THEN
+    BEGIN
+      IF (:LEGAJO = 1) THEN
+      BEGIN
+
+        IF (EXISTS(SELECT * FROM RH_PERSONA WHERE IDPERSONA IN(
+            SELECT IDPERSONA FROM RH_CARGO WHERE USER_SYSTEM = :USUARIO))) THEN
+        BEGIN
+          SELECT FIRST 1 DOCUMENTO FROM RH_PERSONA WHERE IDPERSONA IN(
+          SELECT IDPERSONA FROM RH_CARGO WHERE USER_SYSTEM = :USUARIO)
+          INTO :CLAVE_PDV;
+
+        END
+        ELSE
+        BEGIN
+          CLAVE_PDV = '12345678901234567890';
+        END
+      END
+      ELSE
+      BEGIN
+        CLAVE_PDV = '12345678901234567890';
+      END
+
+      IF (STRLEN(:CLAVE_PDV) = 0) THEN CLAVE_PDV = '12345678901234567890';
+
+      EXECUTE STATEMENT
+        ('UPDATE USUARIO SET PASS = ? WHERE IDUSER = ?')
+        (CLAVE_PDV, USUARIO)
+      ON EXTERNAL
+        :IP||':'||:SYSTEM
+      AS
+        USER     :USER_BD
+        PASSWORD :CLAVE
+      WITH AUTONOMOUS TRANSACTION;
+
+      in autonomous transaction do
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 3, CAST('NOW' AS DATE),:RPT_USER,'Reseteo de clave de usuario exitoso');
+
+      IF (:GASTRONOMIA = 1) THEN
+      BEGIN
+        IF (EXISTS(SELECT * FROM GG_MESERO WHERE IDUSER = :USUARIO)) THEN
+        BEGIN
+          in autonomous transaction do
+          UPDATE GG_MESERO SET CLAVE = :CLAVE_PDV WHERE IDUSER = :USUARIO;
+
+          in autonomous transaction do
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 3, CAST('NOW' AS DATE),:RPT_USER,'Reseteo de codigo de vendedor PDV exitoso');
+
+        END
+      END
+
+      MENSAJE = '3';
+
+    END
+    ELSE
+-- #4 Eliminar Huella de acceso ------------------------------------------------
+    IF (:IDOPERACION = 4) THEN
+    BEGIN
+      IF (:BIOMETRICO = 1) THEN
+      BEGIN
+        IF (EXISTS(SELECT * FROM RH_CARGO_BIO WHERE IDCARGO IN(
+            SELECT IDCARGO FROM RH_CARGO WHERE IDPERSONA IN(
+            SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO)))) THEN
+        BEGIN
+          in autonomous transaction do
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          SELECT GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 4, CAST('NOW' AS DATE),:RPT_USER, 'Eliminacion de huella exitoso, cargoID:'||IDCARGO
+          FROM RH_CARGO_BIO WHERE IDCARGO IN(
+          SELECT IDCARGO FROM RH_CARGO WHERE IDPERSONA IN(
+          SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO));
+
+          in autonomous transaction do
+          DELETE FROM RH_CARGO_BIO WHERE IDCARGO IN(
+          SELECT IDCARGO FROM RH_CARGO WHERE IDPERSONA IN(
+          SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO));
+
+          MENSAJE = '4';
+        END
+        ELSE
+        BEGIN
+          MENSAJE = 'No existe huella registrada';
+        END
+        /*
+          DELETE FROM RH_CARGO_BIO WHERE IDCARGO IN(
+          SELECT IDCARGO FROM RH_CARGO WHERE USER_SYSTEM = :USUARIO);
+        */
+
+      END
+    END
+    ELSE
+-- #5 Reasignar Sucursal -------------------------------------------------------
+    IF (:IDOPERACION = 5) THEN
+    BEGIN
+
+      -- NO Existe sucursal, parametro -1
+      IF (NOT EXISTS(
+                     SELECT * FROM SUCURSAL
+                     WHERE IDSUCURSAL = :IDSUCURSAL)) THEN
+      BEGIN
+        MENSAJE = 'No existe Sucursal';
+        SUSPEND; EXIT;
+      END
+
+      -- Sucursal Activo
+      IF (EXISTS(
+                SELECT * FROM SUCURSAL
+                WHERE IDSUCURSAL = :IDSUCURSAL AND COALESCE(ESTADO,0) <> 1)) THEN
+      BEGIN
+        MENSAJE = 'Sucursal inactivo';
+        SUSPEND; EXIT;
+      END
+
+      -- Sucursal en Mesero activo
+      IF (:GASTRONOMIA = 1) THEN
+      BEGIN
+        IF (EXISTS(SELECT * FROM GG_MESERO WHERE IDUSER = :USUARIO)) THEN
+        BEGIN
+          IN AUTONOMOUS TRANSACTION DO
+          UPDATE GG_MESERO SET IDSUCURSAL = :IDSUCURSAL WHERE IDUSER = :USUARIO AND ESTADO = 1;
+
+          IN AUTONOMOUS TRANSACTION DO
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 5, CAST('NOW' AS DATE),:RPT_USER, 'Reasignacion de sucursal PDV exitoso');
+        END
+      END
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO TMP$USUARIO_SUCURSAL (USUARIO, IDSUCURSAL)
+      SELECT :USUARIO, IDSUCURSAL FROM USUARIO_SUCURSAL WHERE IDUSER = :USUARIO
+      AND IDSUCURSAL IN(SELECT IDSUCURSAL FROM SUCURSAL WHERE COALESCE(ESTADO,0) = 1);
+
+      -- Sucursal Predeterminado en Usuario_Sucursal
+      IN AUTONOMOUS TRANSACTION DO
+      DELETE FROM USUARIO_SUCURSAL WHERE IDUSER = :USUARIO;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO USUARIO_SUCURSAL (IDUSER,IDSUCURSAL,ORDEN)
+      SELECT :USUARIO, IDSUCURSAL, 1 FROM TMP$USUARIO_SUCURSAL WHERE IDSUCURSAL = :IDSUCURSAL AND USUARIO = :USUARIO;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 5, CAST('NOW' AS DATE),:RPT_USER, ('Reasignacion de sucursal predeterminado exitoso, Codigo:'||:IDSUCURSAL));
+
+      -- Demas Sucursales
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO USUARIO_SUCURSAL (IDUSER, IDSUCURSAL, ORDEN)
+      SELECT :USUARIO, IDSUCURSAL, 2 FROM TMP$USUARIO_SUCURSAL WHERE IDSUCURSAL <> :IDSUCURSAL AND USUARIO = :USUARIO; --*/
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 5, CAST('NOW' AS DATE),:RPT_USER, 'Reasignacion/ordenacion de otras sucursales exitoso');
+
+      -- Deposito Salida Predeterminado en Usuario_Deposito
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO TMP$USUARIO_DEPOSITO (IDDEPOSITO, USUARIO, PRINCIPAL)
+      SELECT FIRST 1 IDDEPOSITO, :USUARIO, 1 FROM USUARIO_DEPOSITO WHERE IDUSER = :USUARIO AND IDDEPOSITO IN(
+             SELECT IDDEPOSITO FROM DEPOSITO WHERE IDSUCURSAL = :IDSUCURSAL AND COALESCE(ESTADO,0) = 1 AND COALESCE(PRINCIPAL,0) = 1)
+             AND IDDEPOSITO IN(SELECT DEP.IDDEPOSITO FROM DEPOSITO DEP
+                               INNER JOIN SUCURSAL SUC ON(SUC.IDSUCURSAL = DEP.IDSUCURSAL) WHERE COALESCE(SUC.ESTADO,0) = 1);
+
+      DEPOSITO_SALIDA = (SELECT FIRST 1 IDDEPOSITO FROM TMP$USUARIO_DEPOSITO WHERE USUARIO = :USUARIO AND PRINCIPAL = 1);
+
+      IN AUTONOMOUS TRANSACTION DO
+      DELETE FROM USUARIO_DEPOSITO WHERE IDUSER = :USUARIO AND IDDEPOSITO = :DEPOSITO_SALIDA;
+
+      -- Demas Deposito de Salida
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO TMP$USUARIO_DEPOSITO (IDDEPOSITO, USUARIO, PRINCIPAL)
+      SELECT IDDEPOSITO, :USUARIO, 0 FROM USUARIO_DEPOSITO WHERE IDUSER = :USUARIO AND IDDEPOSITO IN(
+             SELECT IDDEPOSITO FROM DEPOSITO WHERE COALESCE(ESTADO,0) = 1 AND NOT (IDSUCURSAL = :IDSUCURSAL AND COALESCE(PRINCIPAL,0) = 1))
+             AND IDDEPOSITO IN(SELECT DEP.IDDEPOSITO FROM DEPOSITO DEP
+                               INNER JOIN SUCURSAL SUC ON(SUC.IDSUCURSAL = DEP.IDSUCURSAL) WHERE COALESCE(SUC.ESTADO,0) = 1);
+
+      IN AUTONOMOUS TRANSACTION DO
+      DELETE FROM USUARIO_DEPOSITO WHERE IDUSER = :USUARIO AND IDDEPOSITO <> :DEPOSITO_SALIDA;
+
+      -- Inserciones
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO USUARIO_DEPOSITO (IDUSER, IDDEPOSITO, ORDEN)
+      SELECT :USUARIO, IDDEPOSITO, 1 FROM TMP$USUARIO_DEPOSITO WHERE IDDEPOSITO = :DEPOSITO_SALIDA;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 5, CAST('NOW' AS DATE),:RPT_USER, 'Reasignacion de deposito de salida predeterminado exitoso');
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO USUARIO_DEPOSITO (IDUSER, IDDEPOSITO, ORDEN)
+      SELECT :USUARIO, IDDEPOSITO, 2 FROM TMP$USUARIO_DEPOSITO WHERE IDDEPOSITO <> :DEPOSITO_SALIDA;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 5, CAST('NOW' AS DATE),:RPT_USER, 'Reordenacion de otros depositos de salida exitoso');
+
+      -- Deposito Entrada Predeterminado en Usuario_Deposito1
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO TMP$USUARIO_DEPOSITO1 (IDDEPOSITO, USUARIO, PRINCIPAL)
+      SELECT FIRST 1 IDDEPOSITO, :USUARIO, 1 FROM USUARIO_DEPOSITO1 WHERE IDUSER = :USUARIO AND IDDEPOSITO IN(
+             SELECT IDDEPOSITO FROM DEPOSITO WHERE IDSUCURSAL = :IDSUCURSAL AND COALESCE(ESTADO,0) = 1 AND COALESCE(PRINCIPAL,0) = 1)
+             AND IDDEPOSITO IN(SELECT DEP.IDDEPOSITO FROM DEPOSITO DEP
+                               INNER JOIN SUCURSAL SUC ON(SUC.IDSUCURSAL = DEP.IDSUCURSAL) WHERE COALESCE(SUC.ESTADO,0) = 1);
+
+      DEPOSITO_ENTRADA = (SELECT FIRST 1 IDDEPOSITO FROM TMP$USUARIO_DEPOSITO1 WHERE USUARIO = :USUARIO AND PRINCIPAL = 1);
+
+      IN AUTONOMOUS TRANSACTION DO
+      DELETE FROM USUARIO_DEPOSITO1 WHERE IDUSER = :USUARIO AND IDDEPOSITO = :DEPOSITO_ENTRADA;
+
+      -- Demas Deposito de Entrada
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO TMP$USUARIO_DEPOSITO1 (IDDEPOSITO, USUARIO, PRINCIPAL)
+      SELECT IDDEPOSITO, :USUARIO, 0 FROM USUARIO_DEPOSITO1 WHERE IDUSER = :USUARIO AND IDDEPOSITO IN(
+             SELECT IDDEPOSITO FROM DEPOSITO WHERE COALESCE(ESTADO,0) = 1 AND NOT (IDSUCURSAL = :IDSUCURSAL AND COALESCE(PRINCIPAL,0) = 1))
+             AND IDDEPOSITO IN(SELECT DEP.IDDEPOSITO FROM DEPOSITO DEP
+                               INNER JOIN SUCURSAL SUC ON(SUC.IDSUCURSAL = DEP.IDSUCURSAL) WHERE COALESCE(SUC.ESTADO,0) = 1);
+
+      IN AUTONOMOUS TRANSACTION DO
+      DELETE FROM USUARIO_DEPOSITO1 WHERE IDUSER = :USUARIO AND IDDEPOSITO <> :DEPOSITO_ENTRADA;
+
+      -- Inserciones
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO USUARIO_DEPOSITO1 (IDUSER, IDDEPOSITO, ORDEN)
+      SELECT :USUARIO, IDDEPOSITO, 1 FROM TMP$USUARIO_DEPOSITO1 WHERE IDDEPOSITO = :DEPOSITO_ENTRADA;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 5, CAST('NOW' AS DATE),:RPT_USER, 'Reasignacion de deposito de entrada predeterminado exitoso');
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO USUARIO_DEPOSITO1 (IDUSER, IDDEPOSITO, ORDEN)
+      SELECT :USUARIO, IDDEPOSITO, 2 FROM TMP$USUARIO_DEPOSITO1 WHERE IDDEPOSITO <> :DEPOSITO_ENTRADA;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 5, CAST('NOW' AS DATE),:RPT_USER, 'Reordenacion de otros depositos de entrada exitoso');
+
+/*
+      -- Deposito Entrada Predeterminado en Usuario_Deposito
+      UPDATE USUARIO_DEPOSITO1 SET ORDEN = 1 WHERE IDUSER = :USUARIO AND
+             IDDEPOSITO IN(SELECT IDDEPOSITO FROM DEPOSITO WHERE IDSUCURSAL = :IDSUCURSAL AND ESTADO = 1 AND PRINCIPAL = 1) AND
+             IDDEPOSITO IN(SELECT DEP.IDDEPOSITO FROM DEPOSITO DEP
+                           INNER JOIN SUCURSAL SUC ON SUC.IDSUCURSAL = DEP.IDSUCURSAL WHERE SUC.ESTADO = 1);
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 4, CAST('NOW' AS DATE),:RPT_USER, 'Reasignacion de deposito de entrada predeterminado exitoso');
+
+      -- Demas Deposito de Entrada
+      UPDATE USUARIO_DEPOSITO1 SET ORDEN = 2 WHERE IDUSER = :USUARIO AND
+             IDDEPOSITO IN(SELECT IDDEPOSITO FROM DEPOSITO WHERE IDSUCURSAL <> :IDSUCURSAL AND ESTADO = 1) AND
+             IDDEPOSITO IN(SELECT DEP.IDDEPOSITO FROM DEPOSITO DEP
+                           INNER JOIN SUCURSAL SUC ON SUC.IDSUCURSAL = DEP.IDSUCURSAL WHERE SUC.ESTADO = 1);
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 4, CAST('NOW' AS DATE),:RPT_USER, 'Reordenacion de otros depositos de entrada exitoso');
+*/
+      MENSAJE = '5';
+
+    END
+    ELSE
+-- #6 Cambiar Perfil -----------------------------------------------------------
+
+    IF (:IDOPERACION = 6) THEN
+    BEGIN
+
+      -- Que exista perfil
+      EXECUTE STATEMENT
+        ('SELECT COUNT(*) FROM TIPO_USUARIO WHERE IDTIPO_USUARIO = ?')
+        (IDPERFIL)
+      ON EXTERNAL
+        :IP||':'||:SYSTEM
+      AS
+        USER     :USER_BD
+        PASSWORD :CLAVE
+      INTO
+        :EXISTE;
+
+      IF (:EXISTE = 0) THEN
+      BEGIN
+        MENSAJE = 'No existe perfil';
+        SUSPEND;
+        EXIT;
+      END
+
+      -- Estado del perfil
+      EXECUTE STATEMENT
+        ('SELECT ESTADO FROM TIPO_USUARIO WHERE IDTIPO_USUARIO = ?')
+        (IDPERFIL)
+      ON EXTERNAL
+        :IP||':'||:SYSTEM
+      AS
+        USER     :USER_BD
+        PASSWORD :CLAVE
+      INTO
+        :ESTADO;
+
+      IF (:ESTADO = 0) THEN
+      BEGIN
+        MENSAJE = 'Perfil inactivo';
+        SUSPEND;
+        EXIT;
+      END
+
+      IF (:IDPERFIL <> 0) THEN
+      BEGIN
+
+        IF (:GASTRONOMIA = 1) THEN
+        BEGIN
+          IN AUTONOMOUS TRANSACTION DO
+          UPDATE GG_MESERO SET IDTIPO_MESERO = DECODE(:IDPERFIL,8,1,7,3,10,1)
+          WHERE IDTIPO_MESERO <> :IDPERFIL AND IDUSER = :USUARIO AND ESTADO = 1;
+
+          IN AUTONOMOUS TRANSACTION DO
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 6, CAST('NOW' AS DATE),:RPT_USER, 'PDV: Cambio al Perfil' ||:IDPERFIL);
+        END
+
+        -- Enviamos los parametros de actualizacion a la BD System ---------------------
+              execute statement
+                ('select resultado from PCD_ACTUALIZA_PERFIL(?,?,?)')
+                (usuario, idperfil)
+              on external
+                 :IP || ':' || :SYSTEM
+              as
+                user :USER_BD
+                password :CLAVE
+              into
+                :resultado;
+
+              if (:resultado = '') then
+                  mensaje = '';
+              else
+              begin
+                mensaje = :resultado;
+                suspend; exit;
+              end
+
+              select mensaje from PCD_ACTUALIZA_PERFIL(:USUARIO,:IDPERFIL,1,:IDSUCURSAL,:RPT_USER)
+              into resultado;
+
+              if (:resultado = '') then
+                  mensaje = '';
+              else
+              begin
+                mensaje = :resultado;
+                suspend; exit;
+              end
+
+        MENSAJE = '6';
+      end
+    end
+-- #7 Corregir Datos ------------------------------------------------------------
+    ELSE
+    IF (:IDOPERACION = 7) THEN
+    BEGIN
+
+      -- Actualizar datos
+      EXECUTE STATEMENT
+        ('UPDATE USUARIO SET NOMBRE = ?, APELLIDO = ?, DOCUMENTO = ? WHERE IDUSER = ?')
+        (NOMBRE, APELLIDO, DOCUMENTO, USUARIO)
+      ON EXTERNAL
+        :IP||':'||:SYSTEM
+      AS
+        USER     :USER_BD
+        PASSWORD :CLAVE
+      WITH AUTONOMOUS TRANSACTION;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 7, CAST('NOW' AS DATE),:RPT_USER, 'Correccion de datos exitoso');
+
+      MENSAJE = '7';
+    END
+-- #8 Vincular Legajo-----------------------------------------------------------
+    ELSE
+    IF (:IDOPERACION = 8) THEN
+    BEGIN
+
+      -- Actualizar datos
+      EXECUTE STATEMENT
+        ('UPDATE USUARIO SET DOCUMENTO = ? WHERE IDUSER = ?')
+        (DOCUMENTO, USUARIO)
+      ON EXTERNAL
+        :IP||':'||:SYSTEM
+      AS
+        USER     :USER_BD
+        PASSWORD :CLAVE
+      WITH AUTONOMOUS TRANSACTION;
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES (GEN_ID(GEN_HISTORIAL_USUARIO,1), :USUARIO, 8, CAST('NOW' AS DATE),:RPT_USER, 'Cedula de Identidad en Usuario exitoso');
+
+      IF (:LEGAJO = 1) THEN
+      BEGIN
+        SELECT MAX(IDCARGO) FROM RH_CARGO WHERE ESTADO = 1 AND IDPERSONA IN(
+        SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO)
+        INTO :IDCARGO;
+
+        IF (COALESCE(:IDCARGO,0) <> 0) THEN
+        BEGIN
+          IF ( (SELECT STRLEN(USER_SYSTEM) FROM RH_CARGO WHERE IDCARGO = :IDCARGO AND ESTADO = 1) = 0) THEN
+          BEGIN
+            IN AUTONOMOUS TRANSACTION DO
+            UPDATE RH_CARGO SET USER_SYSTEM = :USUARIO WHERE IDCARGO = :IDCARGO AND ESTADO = 1;
+
+            IN AUTONOMOUS TRANSACTION DO
+            INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+            VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 8, CAST('NOW' AS DATE),:RPT_USER,'Vinculacion de usuario a legajo exitoso');
+          END
+        END
+      END
+
+      IF (:GASTRONOMIA = 1) THEN
+      BEGIN
+        SELECT MAX(IDCARGO), IDPERSONA FROM RH_CARGO WHERE ESTADO = 1 AND IDPERSONA IN(
+        SELECT IDPERSONA FROM RH_PERSONA WHERE DOCUMENTO = :DOCUMENTO)
+        GROUP BY IDPERSONA
+        INTO :IDCARGO, :IDPERSONA;
+
+        IF (EXISTS(SELECT * FROM GG_MESERO WHERE IDUSER = :USUARIO AND RH_IDPERSONA IS NULL AND ESTADO = 1)) THEN
+        BEGIN
+          IN AUTONOMOUS TRANSACTION DO
+          UPDATE GG_MESERO SET RH_IDPERSONA = :IDPERSONA WHERE IDUSER = :USUARIO AND ESTADO = 1;
+
+          IN AUTONOMOUS TRANSACTION DO
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 8, CAST('NOW' AS DATE),:RPT_USER,'Vinculacion de Persona/Legajo en PDV exitoso');
+
+        END
+
+        IF (EXISTS(SELECT * FROM GG_MESERO WHERE IDUSER = :USUARIO AND IDCARGO IS NULL AND ESTADO = 1)) THEN
+        BEGIN
+          IN AUTONOMOUS TRANSACTION DO
+          UPDATE GG_MESERO SET IDCARGO = :IDCARGO WHERE IDUSER = :USUARIO AND ESTADO = 1;
+
+          IN AUTONOMOUS TRANSACTION DO
+          INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+          VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 8, CAST('NOW' AS DATE),:RPT_USER,'Vinculacion de Cargo/Legajo en PDV exitoso');
+        END
+      END
+
+      MENSAJE = '8';
+
+    END
+    ELSE
+/* #10 Migracion de Datos-----------------------------------------------------*/
+    IF (:IDOPERACION = 10) THEN
+    BEGIN
+      -- lista de servidores para replicar...
+      FOR
+      SELECT
+        SERVIDOR,
+        DBASE,
+        SYSTEM,
+        USERNAME,
+        CLAVE
+      FROM
+        RDB$RPL_DESTINO
+      ORDER BY
+        ORDEN
+      INTO
+        :IP_DESTINO,
+        :DBASE_DESTINO,
+        :SYSTEM_DESTINO,
+        :USER_DESTINO,
+        :PASS_DESTINO
+      DO
+      BEGIN
+
+        IF (:LEGAJO = 1) THEN
+        BEGIN
+
+          -- Obtenemos datos del legajo
+          SELECT
+            FIRST 1 IDPERSONA, IDPROFESION, IDCIUDAD_NACIMIENTO, IDPAIS_NACIMIENTO, IDCIUDAD,
+            IDBARRIO, COALESCE(IDESTUDIO,0)
+          FROM
+            RH_PERSONA
+          WHERE
+            DOCUMENTO = :DOCUMENTO
+          INTO
+            :REPLICA_PERSONA, :REPLICA_PROFESION, :REPLICA_CIUDAD_NAC, :REPLICA_PAIS, :REPLICA_CIUDAD,
+            :REPLICA_BARRIO, :REPLICA_ESTUDIO;
+
+          -- Cargo
+          SQL_CARGO = '';
+          FOR
+          SELECT IDCARGO FROM RH_CARGO WHERE IDPERSONA = :REPLICA_PERSONA
+          INTO :REPLICA_CARGO
+          DO
+          BEGIN
+
+            SELECT RESULTADO FROM PCD_GENERA_REPLICA('RH_CARGO', :REPLICA_CARGO)
+            INTO :SQL_CARGO;
+
+            ESTADO = 0;
+
+            EXECUTE STATEMENT (SQL_CARGO)
+            ON EXTERNAL :IP_DESTINO || ':' || :DBASE_DESTINO
+            AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+            WITH AUTONOMOUS TRANSACTION;
+
+          END
+
+          -- RH_Dpto
+          FOR
+          SELECT DISTINCT IDDPTO FROM RH_CARGO WHERE IDPERSONA = :REPLICA_PERSONA
+          INTO :REPLICA_DPTO
+          DO
+          BEGIN
+
+            SELECT RESULTADO FROM PCD_GENERA_REPLICA('RH_DPTO', :REPLICA_DPTO)
+            INTO :SQL_DPTO;
+
+            ESTADO = 0;
+
+            EXECUTE STATEMENT (SQL_DPTO)
+            ON EXTERNAL
+              :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+            WITH AUTONOMOUS TRANSACTION;
+          END
+
+          -- Datos Personales
+          ESTADO = 0;
+
+          FOR
+          SELECT RESULTADO FROM PCD_GENERA_REPLICA('PROFESION', :REPLICA_PROFESION)
+          INTO :SQL_PROFESION
+          DO
+          BEGIN
+            EXECUTE STATEMENT (SQL_PROFESION)
+            ON EXTERNAL
+            :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+            WITH AUTONOMOUS TRANSACTION;
+          END
+
+          SELECT RESULTADO FROM PCD_GENERA_REPLICA('CIUDAD', :REPLICA_CIUDAD_NAC)
+          INTO :SQL_CIUDAD_NAC;
+
+          EXECUTE STATEMENT (SQL_CIUDAD_NAC)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SELECT RESULTADO FROM PCD_GENERA_REPLICA('PAIS', :REPLICA_PAIS)
+          INTO :SQL_PAIS;
+
+          EXECUTE STATEMENT (SQL_PAIS)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SELECT RESULTADO FROM PCD_GENERA_REPLICA('CIUDAD', :REPLICA_CIUDAD)
+          INTO :SQL_CIUDAD;
+
+          EXECUTE STATEMENT (SQL_CIUDAD)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SELECT RESULTADO FROM PCD_GENERA_REPLICA('BARRIO', :REPLICA_BARRIO)
+          INTO :SQL_BARRIO;
+
+          EXECUTE STATEMENT (SQL_BARRIO)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SELECT RESULTADO FROM PCD_GENERA_REPLICA('RH_ESTUDIO', :REPLICA_ESTUDIO)
+          INTO :SQL_ESTUDIO;
+
+          EXECUTE STATEMENT (SQL_ESTUDIO)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+        END --fin Legajo
+
+        -- Mesero
+        IF (:GASTRONOMIA = 1) THEN
+        BEGIN
+          IF (EXISTS(SELECT * FROM GG_MESERO WHERE RH_IDPERSONA = :REPLICA_PERSONA)) THEN
+          BEGIN
+            SELECT FIRST 1 IDMESERO FROM GG_MESERO WHERE RH_IDPERSONA = :REPLICA_PERSONA
+            INTO :REPLICA_MESERO;
+
+            SELECT RESULTADO FROM PCD_GENERA_REPLICA('GG_MESERO', :REPLICA_MESERO)
+            INTO :SQL_MESERO;
+
+            EXECUTE STATEMENT (SQL_MESERO)
+            ON EXTERNAL
+            :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+             WITH AUTONOMOUS TRANSACTION;
+          END
+        END --fin Mesero
+
+        -- CONFIGURACIONES DE USUARIO
+        IF (STRLEN(:USUARIO) <> 0) THEN
+        BEGIN
+
+          -- Usuario Sucursal
+          SQL_SUCURSAL = 'delete from USUARIO_SUCURSAL where IDUSER = "' || :USUARIO || '"';
+
+          EXECUTE STATEMENT (SQL_SUCURSAL)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SQL_SUCURSAL = '';
+          USUARIO_SUCURSAL = -1;
+          ORDEN = -1;
+
+          FOR
+          SELECT
+            IDSUCURSAL,
+            CASE WHEN IDSUCURSAL = 1 THEN 2 ELSE 1 END AS ORDEN
+          FROM
+            USUARIO_SUCURSAL
+          WHERE
+            IDUSER = :USUARIO
+            AND IDSUCURSAL IN(SELECT IDSUCURSAL FROM SUCURSAL WHERE COALESCE(ESTADO,0) = 1)
+          INTO
+            :USUARIO_SUCURSAL,
+            :ORDEN
+          DO
+          BEGIN
+
+            SQL_SUCURSAL = 'INSERT INTO USUARIO_SUCURSAL(IDUSER, IDSUCURSAL, ORDEN) VALUES(';
+            SQL_SUCURSAL = :SQL_SUCURSAL || '"' || :USUARIO || '",' || CAST(:USUARIO_SUCURSAL AS INTEGER) || ',' || CAST(COALESCE(:ORDEN,0)  AS VARCHAR(20))|| ')';
+
+            ESTADO = 0;
+
+            EXECUTE STATEMENT (SQL_SUCURSAL)
+            ON EXTERNAL
+            :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+            WITH AUTONOMOUS TRANSACTION;
+
+            WHEN ANY DO
+            BEGIN
+              ESTADO_ERR = SQLCODE;
+              CODE_ERR   = GDSCODE;
+              SUSPEND;
+            END
+
+          END
+
+          -- Usuario Deposito
+          SQL_DEPOSITO = 'delete from USUARIO_DEPOSITO where IDUSER = "' || :USUARIO || '"';
+
+          EXECUTE STATEMENT (SQL_DEPOSITO)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SQL_DEPOSITO = '';
+          IDDEP_SALIDA = -1;
+          ORDEN = -1;
+
+          FOR
+          SELECT
+            DEP.IDDEPOSITO,
+            COALESCE((SELECT FIRST 1
+                      CASE WHEN IDSUCURSAL = 1 THEN 2 ELSE 1 END
+                FROM DEPOSITO WHERE IDDEPOSITO = DEP.IDDEPOSITO),0) AS ORDEN
+          FROM
+            USUARIO_DEPOSITO DEP
+          WHERE
+            DEP.IDUSER = :USUARIO
+            AND DEP.IDDEPOSITO IN(SELECT IDDEPOSITO FROM DEPOSITO WHERE COALESCE(ESTADO,0) = 1)
+          INTO
+            :IDDEP_SALIDA,
+            :ORDEN
+          DO
+          BEGIN
+
+            SQL_DEPOSITO = 'INSERT INTO USUARIO_DEPOSITO(IDUSER, IDDEPOSITO, ORDEN) VALUES(';
+            SQL_DEPOSITO = :SQL_DEPOSITO || '"' || :USUARIO || '",' || CAST(:IDDEP_SALIDA AS INTEGER) || ',' || CAST(COALESCE(:ORDEN,0)  AS VARCHAR(20))|| ')';
+
+            ESTADO = 0;
+
+            EXECUTE STATEMENT (SQL_DEPOSITO)
+            ON EXTERNAL
+            :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+            WITH AUTONOMOUS TRANSACTION;
+
+          END
+
+          -- Usuario Deposito1
+          SQL_DEPOSITO1 = 'delete from USUARIO_DEPOSITO1 where IDUSER = "' || :USUARIO || '"';
+
+          EXECUTE STATEMENT (SQL_DEPOSITO1)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SQL_DEPOSITO1 = '';
+          IDDEP_ENTRADA = -1;
+          ORDEN = -1;
+
+          FOR
+          SELECT
+            DEP.IDDEPOSITO,
+            COALESCE((SELECT FIRST 1
+                  CASE WHEN IDSUCURSAL = 1 THEN 2 ELSE 1 END
+                FROM DEPOSITO WHERE IDDEPOSITO = DEP.IDDEPOSITO),0) AS ORDEN
+          FROM
+            USUARIO_DEPOSITO1 DEP
+          WHERE
+            DEP.IDUSER = :USUARIO
+            AND DEP.IDDEPOSITO IN(SELECT IDDEPOSITO FROM DEPOSITO WHERE COALESCE(ESTADO,0) = 1)
+          INTO
+            :IDDEP_ENTRADA,
+            :ORDEN
+          DO
+          BEGIN
+
+            SQL_DEPOSITO1 = 'INSERT INTO USUARIO_DEPOSITO1(IDUSER, IDDEPOSITO, ORDEN) VALUES(';
+            SQL_DEPOSITO1 = :SQL_DEPOSITO1 || '"' || :USUARIO || '",' || CAST(:IDDEP_ENTRADA AS INTEGER) || ',' || CAST(COALESCE(:ORDEN,0)  AS VARCHAR(20))|| ')';
+
+            ESTADO = 0;
+
+            EXECUTE STATEMENT (SQL_DEPOSITO1)
+            ON EXTERNAL
+            :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+            WITH AUTONOMOUS TRANSACTION;
+
+            WHEN ANY DO
+            BEGIN
+              ESTADO_ERR = SQLCODE;
+              CODE_ERR   = GDSCODE;
+              SUSPEND;
+            END
+
+          END
+
+          -- Usuario Concepto
+          SQL_CONCEPTO = 'delete from USUARIO_CONCEPTO where IDUSER = "' || :USUARIO || '"';
+
+          EXECUTE STATEMENT (SQL_CONCEPTO)
+          ON EXTERNAL
+          :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+
+          SQL_CONCEPTO = '';
+
+          FOR
+          SELECT
+            IDTIPOMOVIMIENTO,
+            PERMISO,
+            IDTALONARIO,
+            PERMISO_VARIOS,
+            IDVENDEDOR,
+            IDPERSONA,
+            IDPLANVENTA,
+            IDCONDICION
+          FROM
+            USUARIO_CONCEPTO
+          WHERE
+            IDUSER = :USUARIO
+          INTO
+            :IDTIPOMOVIMIENTO,
+            :PERMISO,
+            :IDTALONARIO,
+            :PERMISO_VARIOS,
+            :IDVENDEDOR,
+            :IDPERSONA,
+            :IDPLANVENTA,
+            :IDCONDICION
+          DO
+          BEGIN
+
+            SQL_CONCEPTO = 'INSERT INTO USUARIO_CONCEPTO(IDUSER,IDTIPOMOVIMIENTO,PERMISO,IDTALONARIO,PERMISO_VARIOS,IDVENDEDOR,IDPERSONA,IDPLANVENTA,IDCONDICION) VALUES(';
+            SQL_CONCEPTO = :SQL_CONCEPTO || '"' || :USUARIO || '",' || CAST(:IDTIPOMOVIMIENTO AS VARCHAR(20)) || ',' || CAST(COALESCE(:PERMISO,"NULL")  AS VARCHAR(20));
+            SQL_CONCEPTO = :SQL_CONCEPTO || ',' || CAST(COALESCE(:IDTALONARIO,"NULL") AS VARCHAR(20)) || ',"' || :PERMISO_VARIOS || '"';
+            SQL_CONCEPTO = :SQL_CONCEPTO || ',' || CAST(COALESCE(:IDVENDEDOR,"NULL") AS VARCHAR(20)) || ',' || CAST(COALESCE(:IDPERSONA_CONCEPTO,"NULL") AS VARCHAR(20));
+            SQL_CONCEPTO = :SQL_CONCEPTO || ',' || CAST(COALESCE(:IDPLANVENTA,"NULL") AS VARCHAR(20)) || ',' || CAST(COALESCE(:IDCONDICION,"NULL") AS VARCHAR(20)) || ')';
+
+            ESTADO = 0;
+
+            EXECUTE STATEMENT (SQL_CONCEPTO)
+            ON EXTERNAL
+            :IP_DESTINO || ':' || :DBASE_DESTINO AS USER :USER_DESTINO PASSWORD :PASS_DESTINO
+            WITH AUTONOMOUS TRANSACTION;
+
+            WHEN ANY DO
+            BEGIN
+              ESTADO_ERR = SQLCODE;
+              CODE_ERR   = GDSCODE;
+              SUSPEND;
+            END
+
+          END
+
+        END --fin CONFIGURACIONES
+
+        SQL_MIGRACION = 'SELECT RESULTADO FROM PDC_GENERA_USUARIO("USUARIO",'||:USUARIO||')';
+
+        FOR
+        EXECUTE STATEMENT (SQL_MIGRACION)
+        ON EXTERNAL
+        :IP || ':' || :SYSTEM AS USER :USER_BD PASSWORD :CLAVE
+        WITH AUTONOMOUS TRANSACTION
+        INTO
+        :MIGRACION_USUARIO
+        DO
+        BEGIN
+          -- Actualizar USUARIO en System
+          EXECUTE STATEMENT
+          (MIGRACION_USUARIO)
+          ON EXTERNAL
+          :IP_DESTINO||':'||:SYSTEM_DESTINO
+          AS
+          USER     :USER_DESTINO
+          PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+        END
+
+        SQL_MIGRACION = 'SELECT RESULTADO FROM PDC_GENERA_USUARIOEMPRESA("USUARIOEMPRESA",'||:USUARIO||')';
+
+        FOR
+        EXECUTE STATEMENT (SQL_MIGRACION)
+        ON EXTERNAL
+        :IP || ':' || :SYSTEM AS USER :USER_BD PASSWORD :CLAVE
+        WITH AUTONOMOUS TRANSACTION
+        INTO
+        :MIGRACION_USUARIO
+        DO
+        BEGIN
+          -- Actualizar USUARIOEMPRESA en System
+          EXECUTE STATEMENT
+          (MIGRACION_USUARIO)
+          ON EXTERNAL
+          :IP_DESTINO||':'||:SYSTEM_DESTINO
+          AS
+          USER     :USER_DESTINO
+          PASSWORD :PASS_DESTINO
+          WITH AUTONOMOUS TRANSACTION;
+        END
+
+      WHEN ANY DO
+      BEGIN
+        ESTADO_ERR = SQLCODE;
+        CODE_ERR   = GDSCODE;
+        SUSPEND;
+      END
+
+      END -- Rpl_Destino
+
+      IN AUTONOMOUS TRANSACTION DO
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 10, CAST('NOW' AS DATE),:RPT_USER,'Replicacion de Datos exitoso');
+
+    END -- Operacion 10
+    ELSE
+/* #11 Re-Activacion de Usuario ----------------------------------------------*/
+    IF (:IDOPERACION = 11) THEN
+    BEGIN
+      -- Usuario
+      EXECUTE STATEMENT
+        ('UPDATE USUARIO SET ESTADO = 1 WHERE ESTADO = 0 AND IDUSER = ?')
+        (USUARIO)
+      ON EXTERNAL
+        :IP||':'||:SYSTEM
+      AS
+        USER     :USER_BD
+        PASSWORD :CLAVE
+      WITH AUTONOMOUS TRANSACTION;
+
+      in autonomous transaction do
+      INSERT INTO HISTORIAL_USUARIO(ID,USUARIO,IDOPERACION,FECHA,AUTORIZACION,OBSERVACION)
+      VALUES(GEN_ID(GEN_HISTORIAL_USUARIO,1),:USUARIO, 11, CAST('NOW' AS DATE),:RPT_USER,'Re-Activacion de usuario exitoso');
+
+      MENSAJE = '11';
+
+  END /* Operacion */
+
+  SUSPEND;
+
+  WHEN ANY DO
+  BEGIN
+    MENSAJE = SQLCODE;
+    SUSPEND;
+  END
+
+END
+
+
+
+
+CREATE PROCEDURE PCD_BUSQUEDA_USUARIO (
+    NOMBRE VARCHAR (50),
+    APELLIDO VARCHAR (50),
+    DOCUMENTO VARCHAR (10),
+    USUARIO VARCHAR (10),
+    ESTADO_USUARIO INTEGER,
+    FILTRO_PERFIL VARCHAR (5))
+RETURNS (
+    NOMBRE_USUARIO VARCHAR (50),
+    APELLIDO_USUARIO VARCHAR (50),
+    IDUSER VARCHAR (10),
+    ESTADO VARCHAR (8),
+    DOCUMENTO_USUARIO VARCHAR (20),
+    IDPERFIL INTEGER,
+    PERFIL VARCHAR (30),
+    FOTO BLOB sub_type 0 segment size 80)
+AS/*24-03-2024 : AUTOR VLADIMIR */
+DECLARE VARIABLE SENTENCIA VARCHAR(1000);
+DECLARE VARIABLE EXPRESION VARCHAR(5);
+DECLARE VARIABLE IP VARCHAR(15);
+DECLARE VARIABLE SYSTEM VARCHAR(100);
+DECLARE VARIABLE USER_BD VARCHAR(10);
+DECLARE VARIABLE CLAVE VARCHAR(20);
+DECLARE VARIABLE VALOR_PERFIL VARCHAR(5);
+BEGIN
+/* Inicializamos variables ---------------------------------------------------*/
+  ip      = '';
+  system  = '';
+  user_bd = '';
+  clave   = '';
+
+/*Obtenemos datos de la BD System --------------------------------------------*/
+  SELECT
+    FIRST 1
+    IP,
+    SYSTEM,
+    USER_BD,
+    CLAVE
+  FROM
+    CONFIGURACION_USUARIO
+  INTO
+    :IP,
+    :SYSTEM,
+    :USER_BD,
+    :CLAVE;
+
+  IF (:NOMBRE = CAST('%' AS VARCHAR(1))) THEN
+  BEGIN
+    SENTENCIA = 'SELECT UPPER(USU.NOMBRE), UPPER(USU.APELLIDO), USU.IDUSER, DECODE(USU.ESTADO,0,"-",1,"+",2,"*",NULL,"/"),'||
+                ' USU.DOCUMENTO, USU.IDTIPO_USUARIO, TIP.DESCRIPCION, USU.FOTO'||
+                ' FROM USUARIO USU LEFT JOIN TIPO_USUARIO TIP ON (TIP.IDTIPO_USUARIO = USU.IDTIPO_USUARIO)'||
+                ' WHERE USU.ESTADO LIKE ';
+
+                IF (:ESTADO_USUARIO = 1) THEN
+                    SENTENCIA = :SENTENCIA ||' 1'||
+                    ' AND NOT EXISTS(SELECT * FROM TIPO_USUARIO TIU WHERE TIU.IDUSER = USU.IDUSER)';
+                ELSE
+                    SENTENCIA = :SENTENCIA ||' "%"';
+
+                IF (:FILTRO_PERFIL = '0') THEN
+                BEGIN
+                  VALOR_PERFIL = 'NULL';
+                  SENTENCIA = :SENTENCIA ||' AND USU.IDTIPO_USUARIO NOT LIKE ?';
+                END
+                ELSE
+                IF (:FILTRO_PERFIL = '-1') THEN
+                BEGIN
+                  VALOR_PERFIL = '-1';
+                  SENTENCIA = :SENTENCIA ||' AND COALESCE(USU.IDTIPO_USUARIO,0) = ?';
+                END
+                ELSE
+                IF (:FILTRO_PERFIL NOT IN('0','-1')) THEN
+                BEGIN
+                  VALOR_PERFIL = :FILTRO_PERFIL;
+                  SENTENCIA = :SENTENCIA ||' AND USU.IDTIPO_USUARIO LIKE ?';
+                END
+
+/*Ejecuta sentencia ----------------------------------------------------------*/
+    FOR
+    EXECUTE STATEMENT
+      (SENTENCIA)
+      (VALOR_PERFIL)
+    ON EXTERNAL
+      :IP||':'||:SYSTEM
+    AS
+      USER     :USER_BD
+      PASSWORD :CLAVE
+    WITH AUTONOMOUS TRANSACTION
+    INTO
+      :NOMBRE_USUARIO,
+      :APELLIDO_USUARIO,
+      :IDUSER,
+      :ESTADO,
+      :DOCUMENTO_USUARIO,
+      :IDPERFIL,
+      :PERFIL,
+      :FOTO
+    DO
+    BEGIN
+
+/*Casteo de valores ----------------------------------------------------------*/
+      NOMBRE_USUARIO    = COALESCE(TRIM(:NOMBRE_USUARIO),'');
+      APELLIDO_USUARIO  = COALESCE(TRIM(:APELLIDO_USUARIO),'');
+      IDUSER            = COALESCE(:IDUSER,'');
+      DOCUMENTO_USUARIO = COALESCE(:DOCUMENTO_USUARIO,'');
+      IDPERFIL          = COALESCE(:IDPERFIL,0);
+      PERFIL            = COALESCE(:PERFIL,'Desconocido');
+      SUSPEND;
+    END
+
+  END
+  ELSE
+  BEGIN
+/*Busqueda de usuario en el SYSTEM -------------------------------------------*/
+
+    IF (:NOMBRE <> '*' AND :APELLIDO <> '*') THEN
+        EXPRESION = ' AND ';
+    ELSE
+        EXPRESION = ' OR ';
+
+        SENTENCIA = 'SELECT UPPER(USU.NOMBRE), UPPER(USU.APELLIDO), USU.IDUSER, DECODE(USU.ESTADO,0,"-",1,"+",2,"*",NULL,"/"),'||
+                    ' USU.DOCUMENTO, USU.IDTIPO_USUARIO, TIP.DESCRIPCION, USU.FOTO'||
+                    ' FROM USUARIO USU LEFT JOIN TIPO_USUARIO TIP ON (TIP.IDTIPO_USUARIO = USU.IDTIPO_USUARIO)'||
+                    ' WHERE (USU.NOMBRE CONTAINING ?'||:EXPRESION||
+                    ' USU.APELLIDO CONTAINING ? OR USU.DOCUMENTO CONTAINING ? OR USU.IDUSER = ?)';
+
+/*Estado: 1 Solo activo, 0 incluye activos e inactivos -----------------------*/
+                IF (:ESTADO_USUARIO = 1) THEN
+                    SENTENCIA = :SENTENCIA || ' AND (USU.ESTADO = 1)'||
+                    ' AND NOT EXISTS(SELECT * FROM TIPO_USUARIO TIU WHERE TIU.IDUSER = USU.IDUSER)';
+
+                IF (:FILTRO_PERFIL = 0) THEN
+                BEGIN
+                  VALOR_PERFIL = 'NULL';
+                  SENTENCIA = :SENTENCIA ||' AND USU.IDTIPO_USUARIO NOT LIKE ?';
+                END
+                ELSE
+                IF (:FILTRO_PERFIL = -1) THEN
+                BEGIN
+                  VALOR_PERFIL = '0';
+                  SENTENCIA = :SENTENCIA ||' AND COALESCE(USU.IDTIPO_USUARIO,0) = ?';
+                END
+                ELSE
+                IF (:FILTRO_PERFIL NOT IN(0,-1)) THEN
+                BEGIN
+                  VALOR_PERFIL = :FILTRO_PERFIL;
+                  SENTENCIA = :SENTENCIA ||' AND USU.IDTIPO_USUARIO LIKE ?';
+                END
+
+/*Ejecuta sentencia ----------------------------------------------------------*/
+    FOR
+    EXECUTE STATEMENT
+      (SENTENCIA)
+      (NOMBRE,APELLIDO,DOCUMENTO,USUARIO,VALOR_PERFIL)
+    ON EXTERNAL
+      :IP||':'||:SYSTEM
+    AS
+      USER     :USER_BD
+      PASSWORD :CLAVE
+    WITH AUTONOMOUS TRANSACTION
+    INTO
+      :NOMBRE_USUARIO,
+      :APELLIDO_USUARIO,
+      :IDUSER,
+      :ESTADO,
+      :DOCUMENTO_USUARIO,
+      :IDPERFIL,
+      :PERFIL,
+      :FOTO
+    DO
+    BEGIN
+
+/*Casteo de valores ----------------------------------------------------------*/
+      NOMBRE_USUARIO    = COALESCE(TRIM(:NOMBRE_USUARIO),'');
+      APELLIDO_USUARIO  = COALESCE(TRIM(:APELLIDO_USUARIO),'');
+      IDUSER            = COALESCE(:IDUSER,'');
+      DOCUMENTO_USUARIO = COALESCE(:DOCUMENTO_USUARIO,'');
+      IDPERFIL          = COALESCE(:IDPERFIL,0);
+      PERFIL            = COALESCE(:PERFIL,'Desconocido');
+     SUSPEND;
+    END
+  END
+END
+
+
+
+CREATE PROCEDURE PCD_ACTUALIZA_BAJA (
+    REGISTRO VARCHAR (255))
+RETURNS (
+    CADENA VARCHAR (255))
+AS
+BEGIN
+  CADENA = REPLACE(:REGISTRO,'+','-');
+  SUSPEND;
+END

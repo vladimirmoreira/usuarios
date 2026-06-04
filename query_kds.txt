@@ -1,0 +1,705 @@
+/*Express Aqui*/
+SELECT
+  cast(3 as varchar(1)) as param_canal,
+  IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  EXTRACTDATE(APERTURA) AS FECHA,
+  IIF (APERTURA IS NOT NULL, DATETOSTR(APERTURA, '%H:%M'), NULL) AS APERTURA,
+  DATETOSTR(COCINA, '%H:%M') AS MARCACION1,
+
+    IIF(
+    COCINA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, COCINA) < 60,
+        DATEDIFF(MINUTE, APERTURA, COCINA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS COCINA_LISTO,
+  IIF (PREPARACION IS NOT NULL, DATETOSTR(PREPARACION, '%H:%M'), NULL) AS MARCACION2,
+  IIF(
+    PREPARACION IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, COCINA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, COCINA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS PREPARAR_PEDIDO,
+  IIF (ENTREGA IS NOT NULL, DATETOSTR(ENTREGA, '%H:%M'), NULL) AS PRESENTADOR,
+  IIF(
+    ENTREGA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) < 60,
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS ENTREGAR_PEDIDO,
+    IIF(
+    /*ENTREGA IS NOT NULL,*/ CANAL = 3,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) < 60,
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    /*NULL*/
+        IIF(
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    )
+  ) AS TOTAL_ATENCION,
+
+
+  FECHA_SALIDA,
+  FECHA_REGRESO
+FROM(
+     SELECT
+       CMD.IDCOMANDA,
+       ORG.DESCRIPCION,
+       SUC.NOMBRE AS SUCURSAL,
+       CMD.MODULO AS CANAL,
+       CMD.TOTAL AS IMPORTE,
+       PER.PERSONA AS CLIENTE,
+       COALESCE(TRIM(PER.TELEFONO), '?') AS TELEFONO,
+       DRI.APELLIDO ||', '|| DRI.NOMBRE AS SERVICIO,
+       CMD.NRO_COMANDA AS PEDIDO,
+       CMD.APERTURA,
+       COALESCE((SELECT x3.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 2) x3), CMD.APERTURA) AS COCINA,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 3) x4), NULL) AS PREPARACION,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 4) x4), NULL) AS ENTREGA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_SALIDA,NULL), NULL) AS FECHA_SALIDA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_REGRESO,NULL), NULL) AS FECHA_REGRESO
+     FROM
+       GG_COMANDA CMD
+     INNER JOIN
+       PERSONA PER
+       ON (PER.IdPersona = CMD.IdPersona)
+     INNER JOIN
+       GG_MESERO DRI
+       ON (DRI.IdMesero = CMD.IdMesero)
+     INNER JOIN
+       GG_TURNO TUR
+       ON (TUR.IdTurno = CMD.IdTurno)
+     INNER JOIN
+       SUCURSAL SUC
+       ON (SUC.IdSucursal = CMD.IdSucursal)
+     INNER JOIN
+       GG_ORIGEN ORG
+       ON (ORG.IDORIGEN = CMD.IDORIGEN)
+     WHERE
+       TUR.Apertura BETWEEN :vDesde AND :vHasta
+       AND SUC.IdFranquicia = 1
+       AND CMD.IdSucursal = :vSucursal
+       AND CMD.MODULO = 3 AND CMD.PARA_LLEVAR = 0
+       AND CMD.Estado <> 3
+     )
+( IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  APERTURA,
+  COCINA,
+  PREPARACION,
+  ENTREGA,
+  FECHA_SALIDA,
+  FECHA_REGRESO)
+WHERE
+  EXTRACTHOUR(APERTURA) >= :vHora
+ORDER BY
+  EXTRACTDATE(APERTURA),
+  CANAL
+
+
+===========================================================================================================================================  
+/*Express Llevar*/
+SELECT
+  cast(4 as varchar(1)) as param_canal,
+  IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  EXTRACTDATE(APERTURA) AS FECHA,
+  IIF (APERTURA IS NOT NULL, DATETOSTR(APERTURA, '%H:%M'), NULL) AS APERTURA,
+  DATETOSTR(COCINA, '%H:%M') AS MARCACION1,
+
+    IIF(
+    COCINA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, COCINA) < 60,
+        DATEDIFF(MINUTE, APERTURA, COCINA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS COCINA_LISTO,
+  IIF (PREPARACION IS NOT NULL, DATETOSTR(PREPARACION, '%H:%M'), NULL) AS MARCACION2,
+  IIF(
+    PREPARACION IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, COCINA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, COCINA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS PREPARAR_PEDIDO,
+  IIF (ENTREGA IS NOT NULL, DATETOSTR(ENTREGA, '%H:%M'), NULL) AS PRESENTADOR,
+  IIF(
+    ENTREGA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) < 60,
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS ENTREGAR_PEDIDO,
+    IIF(
+    /*ENTREGA IS NOT NULL,*/ CANAL = 3,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) < 60,
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    /*NULL*/
+        IIF(
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    )
+  ) AS TOTAL_ATENCION,
+
+
+  FECHA_SALIDA,
+  FECHA_REGRESO
+FROM(
+     SELECT
+       CMD.IDCOMANDA,
+       ORG.DESCRIPCION,
+       SUC.NOMBRE AS SUCURSAL,
+       CMD.MODULO AS CANAL,
+       CMD.TOTAL AS IMPORTE,
+       PER.PERSONA AS CLIENTE,
+       COALESCE(TRIM(PER.TELEFONO), '?') AS TELEFONO,
+       DRI.APELLIDO ||', '|| DRI.NOMBRE AS SERVICIO,
+       CMD.NRO_COMANDA AS PEDIDO,
+       CMD.APERTURA,
+       COALESCE((SELECT x3.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 2) x3), CMD.APERTURA) AS COCINA,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 3) x4), NULL) AS PREPARACION,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 4) x4), NULL) AS ENTREGA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_SALIDA,NULL), NULL) AS FECHA_SALIDA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_REGRESO,NULL), NULL) AS FECHA_REGRESO
+     FROM
+       GG_COMANDA CMD
+     INNER JOIN
+       PERSONA PER
+       ON (PER.IdPersona = CMD.IdPersona)
+     INNER JOIN
+       GG_MESERO DRI
+       ON (DRI.IdMesero = CMD.IdMesero)
+     INNER JOIN
+       GG_TURNO TUR
+       ON (TUR.IdTurno = CMD.IdTurno)
+     INNER JOIN
+       SUCURSAL SUC
+       ON (SUC.IdSucursal = CMD.IdSucursal)
+     INNER JOIN
+       GG_ORIGEN ORG
+       ON (ORG.IDORIGEN = CMD.IDORIGEN)
+     WHERE
+       TUR.Apertura BETWEEN :vDesde AND :vHasta
+       AND SUC.IdFranquicia = 1
+       AND CMD.IdSucursal = :vSucursal
+       AND CMD.MODULO = 3 AND CMD.PARA_LLEVAR = 1
+       AND CMD.Estado <> 3
+     )
+( IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  APERTURA,
+  COCINA,
+  PREPARACION,
+  ENTREGA,
+  FECHA_SALIDA,
+  FECHA_REGRESO)
+WHERE
+  EXTRACTHOUR(APERTURA) >= :vHora
+ORDER BY
+  EXTRACTDATE(APERTURA),
+  CANAL
+  
+===========================================================================================================================================
+/*Auto*/
+SELECT
+  cast(2 as varchar(1)) as param_canal,
+  IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  EXTRACTDATE(APERTURA) AS FECHA,
+  IIF (APERTURA IS NOT NULL, DATETOSTR(APERTURA, '%H:%M'), NULL) AS APERTURA,
+  DATETOSTR(COCINA, '%H:%M') AS MARCACION1,
+
+    IIF(
+    COCINA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, COCINA) < 60,
+        DATEDIFF(MINUTE, APERTURA, COCINA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS COCINA_LISTO,
+  IIF (PREPARACION IS NOT NULL, DATETOSTR(PREPARACION, '%H:%M'), NULL) AS MARCACION2,
+  IIF(
+    PREPARACION IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, COCINA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, COCINA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS PREPARAR_PEDIDO,
+  IIF (ENTREGA IS NOT NULL, DATETOSTR(ENTREGA, '%H:%M'), NULL) AS PRESENTADOR,
+  IIF(
+    ENTREGA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) < 60,
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS ENTREGAR_PEDIDO,
+    IIF(
+    /*ENTREGA IS NOT NULL,*/ CANAL = 3,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) < 60,
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    /*NULL*/
+        IIF(
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    )
+  ) AS TOTAL_ATENCION,
+
+
+  FECHA_SALIDA,
+  FECHA_REGRESO
+FROM(
+     SELECT
+       CMD.IDCOMANDA,
+       ORG.DESCRIPCION,
+       SUC.NOMBRE AS SUCURSAL,
+       CMD.MODULO AS CANAL,
+       CMD.TOTAL AS IMPORTE,
+       PER.PERSONA AS CLIENTE,
+       COALESCE(TRIM(PER.TELEFONO), '?') AS TELEFONO,
+       DRI.APELLIDO ||', '|| DRI.NOMBRE AS SERVICIO,
+       CMD.NRO_COMANDA AS PEDIDO,
+       CMD.APERTURA,
+       COALESCE((SELECT x3.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 2) x3), CMD.APERTURA) AS COCINA,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 3) x4), NULL) AS PREPARACION,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 4) x4), NULL) AS ENTREGA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_SALIDA,NULL), NULL) AS FECHA_SALIDA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_REGRESO,NULL), NULL) AS FECHA_REGRESO
+     FROM
+       GG_COMANDA CMD
+     INNER JOIN
+       PERSONA PER
+       ON (PER.IdPersona = CMD.IdPersona)
+     INNER JOIN
+       GG_MESERO DRI
+       ON (DRI.IdMesero = CMD.IdMesero)
+     INNER JOIN
+       GG_TURNO TUR
+       ON (TUR.IdTurno = CMD.IdTurno)
+     INNER JOIN
+       SUCURSAL SUC
+       ON (SUC.IdSucursal = CMD.IdSucursal)
+     INNER JOIN
+       GG_ORIGEN ORG
+       ON (ORG.IDORIGEN = CMD.IDORIGEN)
+     WHERE
+       TUR.Apertura BETWEEN :vDesde AND :vHasta
+       AND SUC.IdFranquicia = 1
+       AND CMD.IdSucursal = :vSucursal
+       AND CMD.MODULO = 2
+       AND CMD.Estado <> 3
+     )
+( IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  APERTURA,
+  COCINA,
+  PREPARACION,
+  ENTREGA,
+  FECHA_SALIDA,
+  FECHA_REGRESO)
+WHERE
+  EXTRACTHOUR(APERTURA) >= :vHora
+ORDER BY
+  EXTRACTDATE(APERTURA),
+  CANAL
+  
+===========================================================================================================================================
+/*Delivery*/
+SELECT
+  cast(1 as varchar(1)) as param_canal,
+  IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  EXTRACTDATE(APERTURA) AS FECHA,
+  IIF (APERTURA IS NOT NULL, DATETOSTR(APERTURA, '%H:%M'), NULL) AS APERTURA,
+  DATETOSTR(COCINA, '%H:%M') AS MARCACION1,
+
+    IIF(
+    COCINA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, COCINA) < 60,
+        DATEDIFF(MINUTE, APERTURA, COCINA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, COCINA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, COCINA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS COCINA_LISTO,
+  IIF (PREPARACION IS NOT NULL, DATETOSTR(PREPARACION, '%H:%M'), NULL) AS MARCACION2,
+  IIF(
+    PREPARACION IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, COCINA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, COCINA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, COCINA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, COCINA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS PREPARAR_PEDIDO,
+  IIF (ENTREGA IS NOT NULL, DATETOSTR(ENTREGA, '%H:%M'), NULL) AS PRESENTADOR,
+  IIF(
+    ENTREGA IS NOT NULL,
+    IIF(
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) < 60,
+        DATEDIFF(MINUTE, PREPARACION, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, PREPARACION, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, PREPARACION, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    NULL
+  ) AS ENTREGAR_PEDIDO,
+    IIF(
+    /*ENTREGA IS NOT NULL,*/ CANAL = 3,
+    IIF(
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) < 60,
+        DATEDIFF(MINUTE, APERTURA, ENTREGA) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, ENTREGA) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, ENTREGA), 60) || ' min.',
+            ''
+        )
+    ),
+    /*NULL*/
+        IIF(
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) < 60,
+        DATEDIFF(MINUTE, APERTURA, PREPARACION) || ' min.',
+        CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER)
+        || IIF(
+            CAST(DATEDIFF(MINUTE, APERTURA, PREPARACION) / 60 AS INTEGER) = 1,
+            ' hora',
+            ' horas'
+        )
+        || IIF(
+            MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) > 0,
+            ' ' || MOD(DATEDIFF(MINUTE, APERTURA, PREPARACION), 60) || ' min.',
+            ''
+        )
+    )
+  ) AS TOTAL_ATENCION,
+
+
+  FECHA_SALIDA,
+  FECHA_REGRESO
+FROM(
+     SELECT
+       CMD.IDCOMANDA,
+       ORG.DESCRIPCION,
+       SUC.NOMBRE AS SUCURSAL,
+       CMD.MODULO AS CANAL,
+       CMD.TOTAL AS IMPORTE,
+       PER.PERSONA AS CLIENTE,
+       COALESCE(TRIM(PER.TELEFONO), '?') AS TELEFONO,
+       DRI.APELLIDO ||', '|| DRI.NOMBRE AS SERVICIO,
+       CMD.NRO_COMANDA AS PEDIDO,
+       CMD.APERTURA,
+       COALESCE((SELECT x3.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 2) x3), CMD.APERTURA) AS COCINA,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 3) x4), NULL) AS PREPARACION,
+       COALESCE((SELECT x4.FECHA_HORA FROM SP_RECUPERA_TIEMPOS_COMANDA(CMD.idcomanda, 4) x4), NULL) AS ENTREGA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_SALIDA,NULL), NULL) AS FECHA_SALIDA,
+       COALESCE(IIF(CMD.MODULO = 1, CMD.FECHA_REGRESO,NULL), NULL) AS FECHA_REGRESO
+     FROM
+       GG_COMANDA CMD
+     INNER JOIN
+       PERSONA PER
+       ON (PER.IdPersona = CMD.IdPersona)
+     INNER JOIN
+       GG_MESERO DRI
+       ON (DRI.IdMesero = CMD.IdMesero)
+     INNER JOIN
+       GG_TURNO TUR
+       ON (TUR.IdTurno = CMD.IdTurno)
+     INNER JOIN
+       SUCURSAL SUC
+       ON (SUC.IdSucursal = CMD.IdSucursal)
+     INNER JOIN
+       GG_ORIGEN ORG
+       ON (ORG.IDORIGEN = CMD.IDORIGEN)
+     WHERE
+       TUR.Apertura BETWEEN :vDesde AND :vHasta
+       AND SUC.IdFranquicia = 1
+       AND CMD.IdSucursal = :vSucursal
+       AND CMD.MODULO = 1
+       AND CMD.Estado <> 3
+     )
+( IDPEDIDO,
+  ORIGEN,
+  SUCURSAL,
+  CANAL,
+  IMPORTE,
+  CLIENTE,
+  TELEFONO,
+  SERVICIO,
+  PEDIDO,
+  APERTURA,
+  COCINA,
+  PREPARACION,
+  ENTREGA,
+  FECHA_SALIDA,
+  FECHA_REGRESO)
+WHERE
+  EXTRACTHOUR(APERTURA) >= :vHora
+ORDER BY
+  EXTRACTDATE(APERTURA),
+  CANAL
+  
+===========================================================================================================================================
