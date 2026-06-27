@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
+import { Download, Copy, Check, User } from 'lucide-react';
 import type { FichaUsuario } from '../../api/endpoints';
+import api from '../../api/client';
+import toast from '../../lib/notify';
 
 export default function FichaUsuarioReporte({ data }: { data: FichaUsuario }) {
   const u = data.usuario;
@@ -29,6 +33,7 @@ export default function FichaUsuarioReporte({ data }: { data: FichaUsuario }) {
 
       {/* Datos básicos */}
       <Seccion titulo="Datos básicos">
+        <div className="flex items-start justify-between gap-4">
         <DL>
           <DT>iduser</DT><DD className="font-mono">{u.iduser}</DD>
           <DT>Nombre</DT><DD>{u.nombre} {u.apellido}</DD>
@@ -41,6 +46,8 @@ export default function FichaUsuarioReporte({ data }: { data: FichaUsuario }) {
           <DT>Sin menú</DT>
           <DD>{u.sin_menu ? <Badge color="red">Sí</Badge> : <Badge color="green">No</Badge>}</DD>
         </DL>
+          <FotoUsuario iduser={u.iduser} />
+        </div>
       </Seccion>
 
       {/* Sucursales y Depósitos */}
@@ -268,6 +275,94 @@ export function Badge({
 
 export function Vacio({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-zinc-400 italic">{children}</p>;
+}
+
+// ─── Foto de usuario (lee el blob binario con token; copiar/descargar) ──────
+function toPngBlob(src: Blob): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const u = URL.createObjectURL(src);
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(u); return reject(new Error('no ctx')); }
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(u);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob null'))), 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); reject(new Error('img error')); };
+    img.src = u;
+  });
+}
+
+export function FotoUsuario({ iduser }: { iduser: string }) {
+  const [url, setUrl]     = useState<string | null>(null);
+  const [blob, setBlob]   = useState<Blob | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied]   = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objUrl: string | null = null;
+    setLoading(true);
+    api.get(`/usuarios/${iduser}/foto`, { responseType: 'blob' })
+      .then((r) => {
+        if (!active) return;
+        const b = r.data as Blob;
+        objUrl = URL.createObjectURL(b);
+        setBlob(b); setUrl(objUrl);
+      })
+      .catch(() => { if (active) { setBlob(null); setUrl(null); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; if (objUrl) URL.revokeObjectURL(objUrl); };
+  }, [iduser]);
+
+  const descargar = () => {
+    if (!url) return;
+    const ext = (blob?.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+    const a = document.createElement('a');
+    a.href = url; a.download = `${iduser}.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const copiar = async () => {
+    if (!blob) return;
+    try {
+      const png = await toPngBlob(blob);
+      // @ts-ignore ClipboardItem puede no estar tipado en algunos TS lib targets
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      setCopied(true); toast.success('Foto copiada al portapapeles');
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('No se pudo copiar la imagen (probá descargarla)');
+    }
+  };
+
+  if (loading) {
+    return <div className="h-28 w-28 shrink-0 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />;
+  }
+  if (!url) {
+    return (
+      <div className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 text-zinc-400">
+        <User className="h-8 w-8" />
+        <span className="mt-1 text-[10px]">Sin foto</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-2">
+      <img src={url} alt={`Foto ${iduser}`} className="h-28 w-28 rounded-lg object-cover ring-1 ring-zinc-200 dark:ring-zinc-700" />
+      <div className="flex gap-1.5 print:hidden">
+        <button type="button" onClick={copiar} className="btn-outline px-2 py-1 text-[11px]" title="Copiar al portapapeles">
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />} Copiar
+        </button>
+        <button type="button" onClick={descargar} className="btn-outline px-2 py-1 text-[11px]" title="Descargar imagen">
+          <Download className="h-3.5 w-3.5" /> Descargar
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function nz(v: number | null | undefined): string {

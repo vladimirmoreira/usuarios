@@ -3,3 +3,6 @@ node_modules
 *.log
 coverage
 dist
+usuarios-deploy.zip
+*.tsbuildinfo
+deploy/env.production.server

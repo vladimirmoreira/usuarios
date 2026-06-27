@@ -1,29 +1,39 @@
 'use strict';
 
 const { query, transaction } = require('../config/firebird');
+const { decodeRows } = require('../utils/charset');
 
 const MenuModel = {
   async listarPorUsuario(iduser, idempresa) {
     return query(
       'system',
-      `SELECT idmenu_principal, idempresa, iduser, idmenu, titulo, permiso
-         FROM menu_general WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?
-         ORDER BY idmenu_principal`,
-      [iduser, idempresa],
-    );
+      `SELECT idmenu_principal, idempresa,
+              CAST(iduser AS VARCHAR(10) CHARACTER SET OCTETS) AS iduser,
+              CAST(idmenu AS VARCHAR(40) CHARACTER SET OCTETS) AS idmenu,
+              CAST(titulo AS VARCHAR(120) CHARACTER SET OCTETS) AS titulo,
+              permiso
+         FROM menu_general
+        WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)
+          AND idempresa = ?
+        ORDER BY idmenu_principal`,
+      [String(iduser || '').trim().toUpperCase(), idempresa],
+    ).then((r) => decodeRows(r, ['iduser', 'idmenu', 'titulo']));
   },
 
   async listarPlantillaPorPerfil(idperfil) {
     return query(
       'system',
-      `SELECT m.idmenu_principal, m.idmenu, m.titulo, m.permiso
+      `SELECT m.idmenu_principal,
+              CAST(m.idmenu AS VARCHAR(40) CHARACTER SET OCTETS) AS idmenu,
+              CAST(m.titulo AS VARCHAR(120) CHARACTER SET OCTETS) AS titulo,
+              m.permiso
          FROM menu_general m
         WHERE UPPER(m.iduser) = (
               SELECT FIRST 1 UPPER(iduser) FROM tipo_usuario WHERE idtipo_usuario = ?
         )
         ORDER BY m.idmenu_principal`,
       [idperfil],
-    );
+    ).then((r) => decodeRows(r, ['idmenu', 'titulo']));
   },
 
   /** Actualiza el flag PERMISO (0/1) para los items dados. Una transacción. */
@@ -67,11 +77,17 @@ const MenuModel = {
 
     return query(
       'system',
-      `SELECT idmenu_principal, idempresa, iduser, idmenu, titulo, permiso
-         FROM menu_general WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?
-         ORDER BY idmenu_principal`,
-      [iduser, idempresa],
-    );
+      `SELECT idmenu_principal, idempresa,
+              CAST(iduser AS VARCHAR(10) CHARACTER SET OCTETS) AS iduser,
+              CAST(idmenu AS VARCHAR(40) CHARACTER SET OCTETS) AS idmenu,
+              CAST(titulo AS VARCHAR(120) CHARACTER SET OCTETS) AS titulo,
+              permiso
+         FROM menu_general
+        WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)
+          AND idempresa = ?
+        ORDER BY idmenu_principal`,
+      [String(iduser || '').trim().toUpperCase(), idempresa],
+    ).then((r) => decodeRows(r, ['iduser', 'idmenu', 'titulo']));
   },
 };
 

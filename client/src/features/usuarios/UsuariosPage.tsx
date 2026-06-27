@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Download, Upload, CheckSquare, X, Power, KeyRound, MapPin, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { CatalogosAPI, UsuariosAPI, ConfiguracionAPI, Usuario } from '../../api/endpoints';
+import { useConfirm } from '../../hooks/useConfirm';
 import AgregarUsuarioModal from './AgregarUsuarioModal';
 import EditarUsuarioModal from './EditarUsuarioModal';
 import UsuariosDataGrid from './UsuariosDataGrid';
@@ -81,8 +82,10 @@ export default function UsuariosPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm();
+
   const onReset = async (iduser: string) => {
-    if (!confirm(`¿Reiniciar clave de ${iduser}?`)) return;
+    if (!await confirmDialog({ title: 'Reiniciar clave', message: `¿Reiniciar clave de ${iduser}?`, confirmLabel: 'Reiniciar', variant: 'warning' })) return;
     try {
       const r = await UsuariosAPI.resetClave(iduser);
       r.ok
@@ -93,7 +96,7 @@ export default function UsuariosPage() {
     }
   };
   const onBaja = async (iduser: string) => {
-    if (!confirm(`¿Dar de baja a ${iduser}?`)) return;
+    if (!await confirmDialog({ title: 'Dar de baja', message: `¿Dar de baja a ${iduser}?`, confirmLabel: 'Dar de baja', variant: 'danger' })) return;
     try {
       const r = await UsuariosAPI.baja(iduser);
       r.ok
@@ -105,7 +108,7 @@ export default function UsuariosPage() {
     usuariosQ.refetch();
   };
   const onReactivar = async (iduser: string) => {
-    if (!confirm(`¿Reactivar a ${iduser}?`)) return;
+    if (!await confirmDialog({ title: 'Reactivar usuario', message: `¿Reactivar a ${iduser}?`, confirmLabel: 'Reactivar', variant: 'info' })) return;
     try {
       const r = await UsuariosAPI.reactivar(iduser);
       r.ok
@@ -117,7 +120,7 @@ export default function UsuariosPage() {
     usuariosQ.refetch();
   };
   const onVincularLegajo = async (iduser: string) => {
-    if (!confirm(`¿Vincular ${iduser} con su legajo (último cargo activo)?`)) return;
+    if (!await confirmDialog({ title: 'Vincular legajo', message: `¿Vincular ${iduser} con su legajo (último cargo activo)?`, confirmLabel: 'Vincular', variant: 'info' })) return;
     try {
       const r = await UsuariosAPI.vincularLegajo(iduser);
       r.ok
@@ -157,7 +160,7 @@ export default function UsuariosPage() {
   ) => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
-    if (!confirm(`¿${label} a ${ids.length} usuario(s)?`)) return;
+    if (!await confirmDialog({ title: label, message: `¿${label} a ${ids.length} usuario(s)?`, confirmLabel: label, variant: 'warning' })) return;
     setBulkBusy(true);
     const results = await Promise.allSettled(ids.map((id) => fn(id)));
     const ok = results.filter((r) => r.status === 'fulfilled' && (r.value as any)?.ok).length;
@@ -175,6 +178,7 @@ export default function UsuariosPage() {
 
   return (
     <div className="space-y-3">
+      <ConfirmDialog />
       <div className="flex justify-end gap-2">
         <button className="btn-outline" onClick={() => setShowAgregar(true)}>
           <Plus className="h-4 w-4" /> Agregar

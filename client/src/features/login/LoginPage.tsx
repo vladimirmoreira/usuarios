@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { AuthAPI } from '../../api/endpoints';
 import { useAuth } from '../../auth/AuthContext';
 

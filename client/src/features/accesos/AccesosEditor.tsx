@@ -5,8 +5,8 @@ import {
   ArrowLeft, Save, Loader2, Menu as MenuIcon, ListChecks,
   ArrowRightLeft, Store, Briefcase, Building2, Boxes, Lock,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
-import type { Accesos, AccesosApiAdapter, ConceptosAccesos, SucursalUsuarioItem, DepositoUsuarioItem, AccesosMaster } from '../../api/endpoints';
+import toast from '../../lib/notify';
+import type { Accesos, ConceptosAccesos, SucursalUsuarioItem, DepositoUsuarioItem, AccesosMaster } from '../../api/endpoints'; //AccesosApiAdapter
 import MenuTab from './tabs/MenuTab';
 import FlagsTab from './tabs/FlagsTab';
 import PdvTab from './tabs/PdvTab';
@@ -47,7 +47,7 @@ export type AccesosEditorProps = {
   titulo: string;
   subtitulo?: string;
   backTo: string;
-  api: AccesosApiAdapter;
+  api: any; //AccesosApiAdapter
   queryKey: unknown[];
   esAdmin?: boolean;
   /** 'usuario' habilita columnas de personalización por concepto. Default: 'rol'. */

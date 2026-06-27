@@ -1,6 +1,10 @@
 'use strict';
 
 const { query, transaction } = require('../config/firebird');
+const { decodeRows } = require('../utils/charset');
+
+const OCT = 'VARCHAR(10) CHARACTER SET OCTETS';
+const up = (v) => String(v || '').trim().toUpperCase();
 
 const ConceptoModel = {
   /**
@@ -10,11 +14,11 @@ const ConceptoModel = {
   listarTiposMovimiento: () =>
     query(
       'server',
-      `SELECT idtipomovimiento, descripcion, tipo
+      `SELECT idtipomovimiento, CAST(descripcion AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion, tipo
          FROM tipomovimiento
         WHERE estado = 1
         ORDER BY tipo, descripcion`,
-    ).catch(() => []),
+    ).then((r) => decodeRows(r, ['descripcion'])).catch(() => []),
 
   /**
    * Devuelve los registros de USUARIO_CONCEPTO para un usuario dado.
@@ -27,9 +31,9 @@ const ConceptoModel = {
       `SELECT idtipomovimiento, permiso, permiso_varios,
               idtalonario, idvendedor, idpersona, idplanventa, idcondicion
          FROM usuario_concepto
-        WHERE UPPER(iduser) = UPPER(?)
+        WHERE CAST(UPPER(TRIM(iduser)) AS ${OCT}) = CAST(? AS ${OCT})
         ORDER BY idtipomovimiento`,
-      [iduser],
+      [up(iduser)],
     ).catch(() => []),
 
   /**

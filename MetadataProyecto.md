@@ -116,24 +116,26 @@ CREATE INDEX IDX_M_G_03 ON MENU_GENERAL (IDMENU);
 
 #### `TMP$USUARIO_PERMISOS_GENERALES`
 
+> ⚠️ **Firebird dialect 1:** NO usar comillas dobles alrededor del nombre. El signo `$` es válido en identificadores sin comillas en dialect 1.
+
 ```sql
-CREATE TABLE "TMP$USUARIO_PERMISOS_GENERALES" (
+CREATE TABLE TMP$USUARIO_PERMISOS_GENERALES (
     IDPERMISO   INTEGER     NOT NULL,
-    DESCRIPCION VARCHAR(50)
+    DESCRIPCION VARCHAR(60),
+    CONSTRAINT PK_TMP_PG PRIMARY KEY (IDPERMISO)
 );
-ALTER TABLE "TMP$USUARIO_PERMISOS_GENERALES" ADD PRIMARY KEY (IDPERMISO);
 ```
 
 #### `TMP$USUARIO_PERMISOS_PDV`
 
 ```sql
-CREATE TABLE "TMP$USUARIO_PERMISOS_PDV" (
+CREATE TABLE TMP$USUARIO_PERMISOS_PDV (
     IDPERMISO   INTEGER     NOT NULL,
-    DESCRIPCION VARCHAR(50),
-    VISIBLE     SMALLINT,
-    INDICE      INTEGER
+    DESCRIPCION VARCHAR(60),
+    VISIBLE     SMALLINT    DEFAULT 1,
+    INDICE      INTEGER     DEFAULT 0,
+    CONSTRAINT PK_TMP_PDV PRIMARY KEY (IDPERMISO)
 );
-ALTER TABLE "TMP$USUARIO_PERMISOS_PDV" ADD PRIMARY KEY (IDPERMISO);
 ```
 
 ### 2.2 Generadores
@@ -184,31 +186,45 @@ Contiene el historial de operaciones, la configuración de la instalación, los 
 
 Tabla de configuración por IP de instalación. Una sola fila por entorno operativo típico.
 
+> ⚠️ **Firebird dialect 1:** las columnas `SYSTEM` y `MASTER` son palabras reservadas. En la BD real se llaman **`SYSTEM_BD`** y **`MASTER_BD`**. El modelo Node las alias como `SYS_CFG` y `MASTER` al hacer SELECT.
+
 ```sql
 CREATE TABLE CONFIGURACION_USUARIO (
-    IP                 VARCHAR(15)  NOT NULL,
-    SERVER             VARCHAR(100),
-    SYSTEM             VARCHAR(100),
-    MASTER             VARCHAR(100),
-    USER_BD            VARCHAR(10),
-    CLAVE              VARCHAR(20),
+    IP                 VARCHAR(20)  NOT NULL,
+    SERVER             VARCHAR(60),
+    SYSTEM_BD          VARCHAR(60),   -- alias SYS_CFG en el modelo
+    MASTER_BD          VARCHAR(60),   -- alias MASTER en el modelo
+    USER_BD            VARCHAR(20),
+    CLAVE              VARCHAR(60),
     LEGAJO             SMALLINT,
     BIOMETRICO         SMALLINT,
     GASTRONOMIA        SMALLINT,
     MAXIMO             INTEGER,
-    VERSION_NRO        VARCHAR(10),
+    VERSION_NRO        VARCHAR(20),
     COMPLEMENTARIO     SMALLINT,
-    RUTA_ARCHIVO       VARCHAR(100),
+    RUTA_ARCHIVO       VARCHAR(200),
     AUTORIZADO         VARCHAR(10),
-    CONTABILIDAD       SMALLINT,
-    TALENTO_HUMANO     SMALLINT,
-    DIAS_INACTIVIDAD   SMALLINT DEFAULT 90,
-    METADATA_EJECUTADO SMALLINT DEFAULT 0 NOT NULL
+    CONTABILIDAD       SMALLINT     DEFAULT 0,
+    TALENTO_HUMANO     SMALLINT     DEFAULT 0,
+    DIAS_INACTIVIDAD   INTEGER      DEFAULT 90,
+    METADATA_EJECUTADO SMALLINT     DEFAULT 0 NOT NULL,
+    CONSTRAINT PK_CFG_USR PRIMARY KEY (IP)
 );
 ```
 
 > **`METADATA_EJECUTADO`:** Cerrojo de inicialización. `0` = pendiente · `1` = completado.  
-> Se agrega con el script `server/sql/07_metadata_seed.sql`.
+> Se agrega automáticamente por `migrarDDL()` si la tabla ya existía sin esa columna.
+
+> **`AUTORIZADO`** `VARCHAR(10)`: `iduser` habilitado —además de `ADMIN`— para **ver y editar
+> la sección Configuración** y para ejecutar la inicialización de metadatos. Lo consume
+> `ConfiguracionModel.isAutorizado()` (`UPPER(TRIM(autorizado)) = UPPER(TRIM(:iduser))`), usado
+> por el middleware `requireAuthorized` y por `GET /configuracion/autorizado`. `NULL` = solo `ADMIN`.  
+> ⚠️ **Nota de migración:** esta columna estaba solo en el `CREATE TABLE` y faltaba en la lista de
+> `ALTER ... ADD` de `migrarDDL()`, por lo que las BD que ya existían (creadas antes) **no la recibían**
+> y el listado de Configuración fallaba con `-206 Column unknown`. Se incorporó el
+> `ALTER TABLE configuracion_usuario ADD AUTORIZADO VARCHAR(10)` a `migrarDDL()`. Como el proceso
+> está gateado por `METADATA_EJECUTADO = 1`, en instalaciones ya inicializadas la columna se agrega
+> manualmente con ese mismo `ALTER` (es idempotente).
 
 #### `HISTORIAL_USUARIO`
 

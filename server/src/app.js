@@ -15,8 +15,20 @@ const errorHandler = require('./middlewares/error');
 const app = express();
 
 app.disable('x-powered-by');
+// Detrás de nginx (reverse proxy): confiar en el primer proxy para leer X-Forwarded-For
+// (necesario para req.ip correcto y para que express-rate-limit no falle).
+app.set('trust proxy', 1);
 app.use(helmet());
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permitir requests sin origin (ej: mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origen no permitido: ${origin}`));
+  },
+  credentials: true,
+}));
 app.use(compression());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));

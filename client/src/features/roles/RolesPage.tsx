@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, Plus, Pencil, Trash2, X, AlertTriangle, Search, Database, Lock } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { RolesAPI, type Rol } from '../../api/endpoints';
+import { useConfirm } from '../../hooks/useConfirm';
 
 const TIPOS = [
   { value: 0, label: 'Admin' },
@@ -56,8 +57,10 @@ export default function RolesPage() {
     onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al eliminar'),
   });
 
-  const onEliminar = (r: Rol) => {
-    if (!confirm(`¿Desactivar el rol "${r.descripcion}"?`)) return;
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm();
+
+  const onEliminar = async (r: Rol) => {
+    if (!await confirmDialog({ title: 'Desactivar rol', message: `¿Desactivar el rol "${r.descripcion}"?`, confirmLabel: 'Desactivar', variant: 'danger' })) return;
     eliminarM.mutate(r.idtipo_usuario);
   };
 
@@ -71,6 +74,7 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog />
       <div className="card flex flex-wrap items-center gap-3 p-4">
         <div className="flex-1">
           <h2 className="text-base font-semibold text-zinc-800">Roles / Perfiles</h2>
@@ -199,14 +203,14 @@ export default function RolesPage() {
       {/* Modal */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-xl rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
               <h3 className="text-base font-semibold text-zinc-800">
                 {modal === 'crear' ? 'Nuevo rol' : `Editar: ${editando?.descripcion}`}
               </h3>
               <button onClick={cerrar} className="btn-ghost"><X className="h-4 w-4" /></button>
             </div>
-            <div className="space-y-4 px-6 py-5">
+            <div className="max-h-[88vh] space-y-3 overflow-y-auto px-6 py-4">
               {modal === 'editar' && (
                 <div className="flex gap-4">
                   <div className="flex-1">

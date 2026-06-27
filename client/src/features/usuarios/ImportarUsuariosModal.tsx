@@ -2,7 +2,7 @@
 import { useRef, useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Upload, X, AlertTriangle, CheckCircle, Download, FileText } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import {
   UsuariosAPI,
   type FilaImportacion,

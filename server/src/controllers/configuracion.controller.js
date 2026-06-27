@@ -26,6 +26,11 @@ const ConfiguracionController = {
 
   async crear(req, res, next) {
     try {
+      // Registro único: configuracion_usuario admite una sola fila.
+      const existentes = await ConfiguracionModel.listar();
+      if (existentes.length > 0) {
+        return res.status(409).json({ error: 'Ya existe una configuración. La tabla admite un único registro.' });
+      }
       await ConfiguracionModel.crear(req.body);
       await auditar(req, req.user.iduser, OP.ACTUALIZAR_CUENTA,
         `Configuración IP=${req.body.ip} creada`);
@@ -77,6 +82,7 @@ const ConfiguracionController = {
         gastronomia:    Number(c?.gastronomia) === 1,
         contabilidad:   Number(c?.contabilidad) === 1,
         talento_humano: Number(c?.talento_humano) === 1,
+        complementario: Number(c?.complementario) === 1,
       });
     } catch (e) { next(e); }
   },

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, MapPin, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { CatalogosAPI, UsuariosAPI } from '../../api/endpoints';
+import { useConfirm } from '../../hooks/useConfirm';
 
 type Sucursal = { idsucursal: number; nombre: string };
 
@@ -16,10 +17,11 @@ export default function ReasignarSucursalBulkModal({ ids, onClose, onDone }: Pro
   const sucQ = useQuery<Sucursal[]>({ queryKey: ['sucursales'], queryFn: CatalogosAPI.sucursales });
   const [idsucursal, setIdsucursal] = useState<number | ''>('');
   const [busy, setBusy] = useState(false);
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm();
 
   const ejecutar = async () => {
     if (typeof idsucursal !== 'number') return;
-    if (!confirm(`¿Reasignar la sucursal seleccionada a ${ids.length} usuario(s)?`)) return;
+    if (!await confirmDialog({ title: 'Reasignar sucursal', message: `¿Reasignar la sucursal seleccionada a ${ids.length} usuario(s)?`, confirmLabel: 'Reasignar', variant: 'warning' })) return;
     setBusy(true);
     const results = await Promise.allSettled(
       ids.map((id) => UsuariosAPI.reasignarSucursal(id, idsucursal)),
@@ -35,6 +37,8 @@ export default function ReasignarSucursalBulkModal({ ids, onClose, onDone }: Pro
   };
 
   return (
+    <>
+    <ConfirmDialog />
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-zinc-900">
         <div className="mb-3 flex items-center justify-between">
@@ -72,5 +76,6 @@ export default function ReasignarSucursalBulkModal({ ids, onClose, onDone }: Pro
         </div>
       </div>
     </div>
+    </>
   );
 }

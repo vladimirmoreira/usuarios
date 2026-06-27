@@ -19,6 +19,7 @@ const RolModel              = require('../models/rol.model');
 const AccesosService        = require('./accesos.service');
 const env                   = require('../config/env');
 const { query }             = require('../config/firebird');
+const { decodeRows }        = require('../utils/charset');
 
 const emp = (v) => v || env.DEFAULT_IDEMPRESA;
 
@@ -58,9 +59,9 @@ async function descripcionPerfil(idtipo_usuario) {
   if (Number(idtipo_usuario) === 0) return 'Admin (Superusuario)';
   const rows = await query(
     'system',
-    `SELECT FIRST 1 descripcion FROM tipo_usuario WHERE idtipo_usuario = ?`,
+    `SELECT FIRST 1 CAST(descripcion AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion FROM tipo_usuario WHERE idtipo_usuario = ?`,
     [Number(idtipo_usuario)],
-  ).catch(() => []);
+  ).then((r) => decodeRows(r, ['descripcion'])).catch(() => []);
   return rows[0]?.descripcion || null;
 }
 
@@ -70,7 +71,10 @@ async function vinculoLegajo(documento, iduser) {
   try {
     const rows = await query(
       'server',
-      `SELECT FIRST 1 p.idpersona, p.nombre, p.apellido, p.nrodocumento,
+      `SELECT FIRST 1 p.idpersona,
+              CAST(p.nombre AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+              CAST(p.apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
+              p.nrodocumento,
               c.idcargo, c.iduser_system, c.estado AS cargo_estado
          FROM rh_persona p
          LEFT JOIN rh_cargo c ON c.idpersona = p.idpersona
@@ -79,7 +83,7 @@ async function vinculoLegajo(documento, iduser) {
         ORDER BY c.estado DESC, c.idcargo DESC`,
       [documento, documento, iduser, iduser],
     );
-    return rows[0] || null;
+    return rows[0] ? decodeRows([rows[0]], ['nombre', 'apellido'])[0] : null;
   } catch (_) {
     return null;
   }
@@ -91,13 +95,15 @@ async function vinculoMesero(documento, iduser) {
   try {
     const rows = await query(
       'server',
-      `SELECT FIRST 1 idmesero, nombre, nrodocumento, idsucursal, estado, idtipo_mesero
+      `SELECT FIRST 1 idmesero,
+              CAST(nombre AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+              nrodocumento, idsucursal, estado, idtipo_mesero
          FROM gg_mesero
         WHERE (? IS NOT NULL AND nrodocumento = ?)
            OR (? IS NOT NULL AND UPPER(TRIM(iduser)) = UPPER(TRIM(?)))`,
       [documento, documento, iduser, iduser],
     );
-    return rows[0] || null;
+    return rows[0] ? decodeRows([rows[0]], ['nombre'])[0] : null;
   } catch (_) {
     return null;
   }

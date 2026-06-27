@@ -34,6 +34,20 @@ const AuthController = {
         return res.status(401).json({ error: 'Credenciales inválidas' });
       }
 
+      // Vigencia: si el usuario tiene fecha de caducidad y ya pasó, no permite ingresar.
+      if (user.hasta_vigencia && new Date(user.hasta_vigencia) < new Date()) {
+        auditarDirecto({ iduser: user.iduser, idoperacion: OP.LOGIN_FALLIDO, rptUser: user.iduser,
+          observacion: `Vigencia vencida (${user.hasta_vigencia}) ip=${ip}` });
+        return res.status(403).json({ error: 'Su acceso está vencido. Contacte al administrador.' });
+      }
+
+      // Gate de acceso al módulo: requiere menu_general 'mnuArchivoPanelControl' (permiso=1).
+      if (!(Number(user.acceso_modulo) > 0)) {
+        auditarDirecto({ iduser: user.iduser, idoperacion: OP.LOGIN_FALLIDO, rptUser: user.iduser,
+          observacion: `Sin acceso al módulo (mnuArchivoPanelControl) ip=${ip}` });
+        return res.status(403).json({ error: 'No tiene acceso al módulo de Usuarios. Contacte al administrador.' });
+      }
+
       const payload = {
         iduser: user.iduser,
         idperfil: user.idtipo_usuario,

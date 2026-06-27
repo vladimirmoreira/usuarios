@@ -15,7 +15,7 @@
  *   1 → ya inicializado (bloquea nueva ejecución)
  */
 
-const { query, transaction } = require('../config/firebird');
+const { query, transaction, getConnection } = require('../config/firebird');
 const logger = require('../utils/logger');
 
 // ── Datos de referencia ──────────────────────────────────────────────────────
@@ -142,20 +142,20 @@ async function obtenerEstado() {
 
 async function seedPermisosGenerales(tx) {
   // Limpieza previa + reinserción completa del catálogo
-  await tx.query('DELETE FROM "TMP$USUARIO_PERMISOS_GENERALES"');
+  await tx.query('DELETE FROM TMP$USUARIO_PERMISOS_GENERALES');
   for (const [idpermiso, descripcion] of PERMISOS_GENERALES) {
     await tx.query(
-      'INSERT INTO "TMP$USUARIO_PERMISOS_GENERALES" (idpermiso, descripcion) VALUES (?, ?)',
+      'INSERT INTO TMP$USUARIO_PERMISOS_GENERALES (idpermiso, descripcion) VALUES (?, ?)',
       [idpermiso, descripcion],
     );
   }
 }
 
 async function seedPermisosPdv(tx) {
-  await tx.query('DELETE FROM "TMP$USUARIO_PERMISOS_PDV"');
+  await tx.query('DELETE FROM TMP$USUARIO_PERMISOS_PDV');
   for (const [idpermiso, descripcion, visible, indice] of PERMISOS_PDV) {
     await tx.query(
-      'INSERT INTO "TMP$USUARIO_PERMISOS_PDV" (idpermiso, descripcion, visible, indice) VALUES (?, ?, ?, ?)',
+      'INSERT INTO TMP$USUARIO_PERMISOS_PDV (idpermiso, descripcion, visible, indice) VALUES (?, ?, ?, ?)',
       [idpermiso, descripcion, visible, indice],
     );
   }
@@ -192,6 +192,135 @@ async function seedTipoOperacion(tx) {
  *
  * @returns {{ ok: boolean, detalle: object }}
  */
+/**
+ * Aplica los ALTER TABLE necesarios antes del seed.
+ * Ignora errores de "columna ya existe" (código Firebird 335544351).
+ */
+async function migrarDDL() {
+  // Dialect 1: no soporta DATE → usar TIMESTAMP; no soporta BOOLEAN → usar SMALLINT
+
+  // BD system: tablas que deben existir + columnas adicionales
+  const ddlSystem = [
+    // Tablas TMP$ — en dialect 1 no usar comillas dobles; $ es válido en nombres de tabla
+    `CREATE TABLE TMP$USUARIO_PERMISOS_GENERALES (
+       IDPERMISO   INTEGER     NOT NULL,
+       DESCRIPCION VARCHAR(60) NOT NULL,
+       CONSTRAINT PK_TMP_PG PRIMARY KEY (IDPERMISO)
+     )`,
+    `CREATE TABLE TMP$USUARIO_PERMISOS_PDV (
+       IDPERMISO   INTEGER     NOT NULL,
+       DESCRIPCION VARCHAR(60) NOT NULL,
+       VISIBLE     SMALLINT    DEFAULT 1,
+       INDICE      INTEGER     DEFAULT 0,
+       CONSTRAINT PK_TMP_PDV PRIMARY KEY (IDPERMISO)
+     )`,
+    `CREATE TABLE TMP$USUARIO_PERMISOS_CONCEPTOS (
+       IDPERMISO_CONCEPTO INTEGER     NOT NULL,
+       DESCRIPCION        VARCHAR(60) NOT NULL,
+       CONSTRAINT PK_TMP_PC PRIMARY KEY (IDPERMISO_CONCEPTO)
+     )`,
+    // Columnas faltantes en TIPO_USUARIO
+    `ALTER TABLE tipo_usuario ADD iduser      VARCHAR(10)`,
+    `ALTER TABLE tipo_usuario ADD tipo        SMALLINT DEFAULT 0`,
+    `ALTER TABLE tipo_usuario ADD estado      SMALLINT DEFAULT 1`,
+    `ALTER TABLE tipo_usuario ADD master      INTEGER  DEFAULT 0`,
+    `ALTER TABLE tipo_usuario ADD edicion_rol SMALLINT DEFAULT 0`,
+    // Columnas faltantes en USUARIO
+    `ALTER TABLE usuario ADD estado             SMALLINT DEFAULT 1`,
+    `ALTER TABLE usuario ADD documento          VARCHAR(20)`,
+    `ALTER TABLE usuario ADD exclusion_permisos INTEGER  DEFAULT 0`,
+    `ALTER TABLE usuario ADD hasta_vigencia     TIMESTAMP`,
+  ];
+
+  // BD server: tablas que deben existir + columnas adicionales
+  const ddlServer = [
+    // CONFIGURACION_USUARIO — tabla de configuración por IP
+    // SYSTEM_BD / MASTER_BD evitan el conflicto con palabras reservadas en dialect 1
+    `CREATE TABLE configuracion_usuario (
+       IP               VARCHAR(20)  NOT NULL,
+       SERVER           VARCHAR(60),
+       SYSTEM_BD        VARCHAR(60),
+       MASTER_BD        VARCHAR(60),
+       USER_BD          VARCHAR(20),
+       CLAVE            VARCHAR(60),
+       LEGAJO           SMALLINT     DEFAULT 0,
+       BIOMETRICO       SMALLINT     DEFAULT 0,
+       GASTRONOMIA      SMALLINT     DEFAULT 0,
+       COMPLEMENTARIO   SMALLINT     DEFAULT 0,
+       MAXIMO           INTEGER,
+       RUTA_ARCHIVO     VARCHAR(200),
+       VERSION_NRO      VARCHAR(20),
+       AUTORIZADO       VARCHAR(10),
+       CONTABILIDAD     SMALLINT     DEFAULT 0,
+       TALENTO_HUMANO   SMALLINT     DEFAULT 0,
+       DIAS_INACTIVIDAD INTEGER      DEFAULT 90,
+       METADATA_EJECUTADO SMALLINT   DEFAULT 0 NOT NULL,
+       CONSTRAINT PK_CFG_USR PRIMARY KEY (IP)
+     )`,
+    // HISTORIAL_USUARIO — auditoría  (dialect 1: TIMESTAMP en lugar de DATE)
+    `CREATE TABLE historial_usuario (
+       ID           INTEGER      NOT NULL,
+       USUARIO      VARCHAR(10),
+       IDOPERACION  INTEGER      NOT NULL,
+       FECHA        TIMESTAMP,
+       AUTORIZACION VARCHAR(10)  NOT NULL,
+       OBSERVACION  BLOB SUB_TYPE 1,
+       CONSTRAINT PK_HIST_USR PRIMARY KEY (ID)
+     )`,
+    // Generador para HISTORIAL_USUARIO
+    `CREATE GENERATOR GEN_HISTORIAL_USUARIO`,
+    // TIPO_OPERACION — catálogo de operaciones
+    `CREATE TABLE tipo_operacion (
+       IDTIPO_OPERACION INTEGER     NOT NULL,
+       DESCRIPCION      VARCHAR(60) NOT NULL,
+       CONSTRAINT PK_TIPO_OP PRIMARY KEY (IDTIPO_OPERACION)
+     )`,
+    // Columnas adicionales en CONFIGURACION_USUARIO si ya existía sin ellas
+    `ALTER TABLE configuracion_usuario ADD METADATA_EJECUTADO SMALLINT DEFAULT 0 NOT NULL`,
+    `ALTER TABLE configuracion_usuario ADD CONTABILIDAD   INTEGER DEFAULT 0 NOT NULL`,
+    `ALTER TABLE configuracion_usuario ADD TALENTO_HUMANO INTEGER DEFAULT 0 NOT NULL`,
+    `ALTER TABLE configuracion_usuario ADD DIAS_INACTIVIDAD INTEGER DEFAULT 90`,
+    // Si la tabla existía con SYSTEM/MASTER sin sufijo _BD, agregar las variantes con _BD
+    `ALTER TABLE configuracion_usuario ADD SYSTEM_BD VARCHAR(60)`,
+    `ALTER TABLE configuracion_usuario ADD MASTER_BD VARCHAR(60)`,
+    `ALTER TABLE configuracion_usuario ADD CLAVE     VARCHAR(60)`,
+    // AUTORIZADO: iduser habilitado (además de Admin) a ver/editar la sección Configuración.
+    // Faltaba en la lista de ALTER (solo estaba en el CREATE), por eso no se agregaba en BD ya existentes.
+    `ALTER TABLE configuracion_usuario ADD AUTORIZADO VARCHAR(10)`,
+    `ALTER TABLE configuracion_usuario ADD MAIL_RESETCLAVE SMALLINT DEFAULT 0`,
+  ];
+
+  const runDDL = (scope, statements) =>
+    new Promise((resolve) => {
+      getConnection(scope).then((db) => {
+        let i = 0;
+        const next = () => {
+          if (i >= statements.length) { db.detach(); return resolve(); }
+          const sql = statements[i++];
+          db.query(sql, [], (err) => {
+            if (err) {
+              const msg = err.message ?? '';
+              const ignorar =
+                msg.includes('already exists') ||
+                msg.includes('already defined') ||
+                msg.includes('duplicate value') ||
+                msg.includes('Attempt to store duplicate');
+              if (!ignorar) logger.warn({ err: msg.slice(0, 200), sql: sql.slice(0, 80) }, 'MetadataDDL warn');
+            }
+            next();
+          });
+        };
+        next();
+      }).catch((err) => {
+        logger.warn({ err, scope }, 'MetadataDDL: no se pudo conectar');
+        resolve();
+      });
+    });
+
+  await runDDL('system', ddlSystem);
+  await runDDL('server', ddlServer);
+}
+
 async function ejecutar() {
   // 1. Verificar cerrojo
   const estado = await obtenerEstado();
@@ -201,6 +330,9 @@ async function ejecutar() {
     throw err;
   }
 
+  // 2. Aplicar migraciones DDL (columnas faltantes) — idempotente
+  await migrarDDL();
+
   const detalle = {
     permisos_generales: 0,
     permisos_pdv: 0,
@@ -208,7 +340,7 @@ async function ejecutar() {
     tipo_operacion: 0,
   };
 
-  // 2. Seed BD system
+  // 3. Seed BD system
   await transaction('system', async (tx) => {
     await seedPermisosGenerales(tx);
     detalle.permisos_generales = PERMISOS_GENERALES.length;
@@ -220,7 +352,7 @@ async function ejecutar() {
     detalle.tipo_usuario = TIPO_USUARIO.length;
   });
 
-  // 3. Seed BD server + marcar como ejecutado
+  // 4. Seed BD server + marcar como ejecutado
   await transaction('server', async (tx) => {
     await seedTipoOperacion(tx);
     detalle.tipo_operacion = TIPO_OPERACION.length;

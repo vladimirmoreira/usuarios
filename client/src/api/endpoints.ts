@@ -18,6 +18,8 @@ export type Usuario = {
   sin_menu: number;
   /** 1 = fue excluido de la última propagación del rol (permisos personalizados) */
   exclusion_permisos?: number;
+  /** Fecha de caducidad del acceso (ISO) o null si no caduca */
+  hasta_vigencia?: string | null;
 };
 
 export type Complemento = {
@@ -43,7 +45,7 @@ export const UsuariosAPI = {
   cambiarPerfil: (iduser: string, idperfil: number) =>
     api.post(`/usuarios/${iduser}/cambiar-perfil`, { idperfil }).then((r) => r.data),
   bloquearSinMenu: () => api.post('/usuarios/bloquear-sin-menu').then((r) => r.data),
-  actualizar: (iduser: string, data: { nombre?: string; apellido?: string; documento?: string }) =>
+  actualizar: (iduser: string, data: { nombre?: string; apellido?: string; documento?: string; hasta_vigencia?: string | null }) =>
     api.patch(`/usuarios/${iduser}`, data).then((r) => r.data),
   sugerirIduser: (nombre: string, apellido: string) =>
     api.get<{ sugerido: string | null }>('/usuarios/sugerir', { params: { nombre, apellido } }).then((r) => r.data),
@@ -382,7 +384,7 @@ export type Operacion = {
 export type Configuracion = {
   ip:            string;
   server:        string | null;
-  system:        string | null;
+  sys_cfg:       string | null;
   master:        string | null;
   user_bd:       string | null;
   legajo:        number | null;
@@ -428,6 +430,7 @@ export type ConfigFlags = {
   gastronomia:    boolean;
   contabilidad:   boolean;
   talento_humano: boolean;
+  complementario: boolean;
 };
 
 // ── Reportes ─────────────────────────────────────────────────────────────

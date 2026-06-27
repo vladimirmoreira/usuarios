@@ -1,7 +1,7 @@
 import { useState, ChangeEvent, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Pencil, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { z } from 'zod';
 import { RolesAPI, Rol, UsuariosAPI, Usuario, Complemento } from '../../api/endpoints';
 
@@ -20,6 +20,7 @@ type FormState = {
   apellido: string;
   documento: string;
   idperfil: number | '';
+  hasta_vigencia: string;
 };
 type FormErrors = Partial<Record<keyof FormState, string>>;
 type DocStatus = 'idle' | 'checking' | 'ok' | 'taken';
@@ -39,6 +40,7 @@ export default function EditarUsuarioModal({
     apellido:  usuario.apellido,
     documento: usuario.documento,
     idperfil:  usuario.idtipo_usuario,
+    hasta_vigencia: usuario.hasta_vigencia ? String(usuario.hasta_vigencia).slice(0, 10) : '',
   });
   const [errors, setErrors]   = useState<FormErrors>({});
   const [docStatus, setDocStatus] = useState<DocStatus>('idle');
@@ -57,13 +59,14 @@ export default function EditarUsuarioModal({
   const perfilesQ = useQuery({ queryKey: ['perfiles-all'], queryFn: () => RolesAPI.listar() });
 
   const mutation = useMutation({
-    mutationFn: async (data: { nombre: string; apellido: string; documento: string; idperfil: number }) => {
+    mutationFn: async (data: { nombre: string; apellido: string; documento: string; idperfil: number; hasta_vigencia: string }) => {
       const ops: Promise<any>[] = [];
       // Actualizar datos básicos siempre (el backend ignora campos sin cambios)
       ops.push(UsuariosAPI.actualizar(usuario.iduser, {
         nombre:    data.nombre.trim(),
         apellido:  data.apellido.trim(),
         documento: data.documento.trim(),
+        hasta_vigencia: data.hasta_vigencia || null,
       }));
       // Cambiar perfil solo si se modificó
       if (data.idperfil !== usuario.idtipo_usuario) {
@@ -144,6 +147,7 @@ export default function EditarUsuarioModal({
       apellido:  form.apellido,
       documento: form.documento,
       idperfil:  Number(form.idperfil),
+      hasta_vigencia: form.hasta_vigencia,
     });
   };
 
@@ -178,7 +182,7 @@ export default function EditarUsuarioModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     >
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
         {/* Cabecera */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
           <div className="flex items-center gap-2">
@@ -191,7 +195,7 @@ export default function EditarUsuarioModal({
         </div>
 
         <form onSubmit={onSubmit} noValidate>
-          <div className="space-y-4 px-6 py-5">
+          <div className="max-h-[88vh] space-y-3 overflow-y-auto px-6 py-4">
 
             {/* Usuario — solo lectura */}
             <div>
@@ -269,6 +273,13 @@ export default function EditarUsuarioModal({
                   })}
                 </select>
                 {errors.idperfil && <p className="mt-0.5 text-xs text-rose-600">{errors.idperfil}</p>}
+              </div>
+
+              {/* Vigencia hasta (opcional) */}
+              <div>
+                <label className="label">Vigencia hasta</label>
+                <input type="date" value={form.hasta_vigencia} onChange={setField('hasta_vigencia')} className="input mt-1" />
+                <p className="mt-0.5 text-xs text-slate-400">Vacío = sin caducidad</p>
               </div>
 
               {/* Sucursal actual (read-only) */}

@@ -106,6 +106,7 @@ router.post(
       idsucursal: z.number().int().positive(),
       control: z.number().int().min(0).max(1).default(1),
       foto: z.string().optional(),
+      hasta_vigencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }),
   }),
   ctrl.crear,
@@ -119,6 +120,7 @@ router.patch(
       nombre: z.string().max(25).optional(),
       apellido: z.string().max(25).optional(),
       documento: z.string().max(20).optional(),
+      hasta_vigencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     }),
   }),
   ctrl.actualizar,
@@ -140,6 +142,7 @@ router.post(
 );
 router.get('/:iduser/historial', validate(idParam), ctrl.historial);
 router.get('/:iduser/sucursal-principal', validate(idParam), ctrl.sucursalPrincipal);
+router.get('/:iduser/foto', validate(idParam), ctrl.foto);
 router.get(
   '/:iduser/turnos',
   validate({

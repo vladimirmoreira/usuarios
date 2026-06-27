@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, Plus, Pencil, Trash2, X, List, HelpCircle, Database, CheckCircle2, AlertCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { ConfiguracionAPI, type Configuracion, type Operacion, type MetadataResultado } from '../../api/endpoints';
+import { useConfirm } from '../../hooks/useConfirm';
 
 type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'complementario'|'contabilidad'|'talento_humano'> & {
   clave:          string;
@@ -15,7 +16,7 @@ type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'compleme
 };
 
 const emptyForm: CfgForm = {
-  ip: '', server: '', system: '', master: '', user_bd: '', clave: '',
+  ip: '', server: '', sys_cfg: '', master: '', user_bd: '', clave: '',
   legajo: false, biometrico: false, gastronomia: false, complementario: false,
   contabilidad: false, talento_humano: false,
   maximo: null, ruta_archivo: null, version_nro: null, autorizado: null,
@@ -125,8 +126,10 @@ export default function ConfiguracionPage() {
     modal === 'crear' ? crearM.mutate() : editarM.mutate();
   };
 
-  const onEliminar = (r: Configuracion) => {
-    if (!confirm(`¿Eliminar la configuración de ${r.ip}?`)) return;
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm();
+
+  const onEliminar = async (r: Configuracion) => {
+    if (!await confirmDialog({ title: 'Eliminar configuración', message: `¿Eliminar la configuración de ${r.ip}?`, confirmLabel: 'Eliminar', variant: 'danger' })) return;
     eliminarM.mutate(r.ip);
   };
 
@@ -134,6 +137,7 @@ export default function ConfiguracionPage() {
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog />
       {/* Cabecera */}
       <div className="card flex flex-wrap items-center gap-3 p-4">
         <div className="flex-1">
@@ -167,7 +171,7 @@ export default function ConfiguracionPage() {
             <Database className="h-3.5 w-3.5" /> Metadatos
           </button>
         </div>
-        {tab === 'config' && (
+        {tab === 'config' && (listQ.data?.length ?? 0) === 0 && (
           <button className="btn-primary" onClick={abrirCrear}>
             <Plus className="h-4 w-4" /> Nueva configuración
           </button>
@@ -198,7 +202,7 @@ export default function ConfiguracionPage() {
               <tr key={r.ip} className="border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-700/60 dark:hover:bg-zinc-800/50">
                 <td className="px-3 py-1.5 font-mono font-medium">{r.ip}</td>
                 <td className="px-3 py-1.5 text-zinc-600 truncate max-w-[14rem]">{r.server || '—'}</td>
-                <td className="px-3 py-1.5 text-zinc-600">{r.system || '—'}</td>
+                <td className="px-3 py-1.5 text-zinc-600">{r.sys_cfg || '—'}</td>
                 <td className="px-3 py-1.5 font-mono text-xs text-zinc-500">{r.user_bd || '—'}</td>
                 <td className="px-3 py-1.5 text-center"><Flag v={r.legajo === 1} /></td>
                 <td className="px-3 py-1.5 text-center"><Flag v={r.biometrico === 1} /></td>
@@ -340,8 +344,8 @@ export default function ConfiguracionPage() {
               <button
                 className="btn-primary"
                 disabled={metaM.isPending || metaQ.isLoading}
-                onClick={() => {
-                  if (!confirm('¿Confirma la inicialización de metadatos? Esta operación no se puede repetir.')) return;
+                onClick={async () => {
+                  if (!await confirmDialog({ title: 'Inicialización de Metadatos', message: '¿Confirma la inicialización de metadatos? Esta operación no se puede repetir.', confirmLabel: 'Ejecutar', variant: 'warning' })) return;
                   metaM.mutate();
                 }}
               >
@@ -388,7 +392,7 @@ export default function ConfiguracionPage() {
                 </div>
                 <div>
                   <label className="label">Sistema (BD)</label>
-                  <input className="input mt-1" value={form.system ?? ''} onChange={set('system')} maxLength={100} />
+                  <input className="input mt-1" value={form.sys_cfg ?? ''} onChange={set('sys_cfg')} maxLength={100} />
                 </div>
                 <div>
                   <label className="label">Master</label>

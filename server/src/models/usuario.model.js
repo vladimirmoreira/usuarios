@@ -1,29 +1,50 @@
 'use strict';
 
-const { query, transaction } = require('../config/firebird');
+const { query, transaction, readBinaryBlob } = require('../config/firebird');
+const { decodeRows } = require('../utils/charset');
 
 const UsuarioModel = {
   async findByCredentials(iduser, idempresa) {
+    // BD system (orgonita_system) es CHARACTER SET ASCII y node-firebird conecta en NONE:
+    // hay que comparar los parámetros de texto casteando ambos lados a OCTETS, si no Firebird
+    // lanza "Cannot transliterate character between character sets".
+    const idu = String(iduser || '').trim().toUpperCase();
+    const emp = String(idempresa || '').trim();
     const rows = await query(
       'system',
-      `SELECT FIRST 1 iduser, nombre, apellido, idempresa, idtipo_usuario, estado, pass
-         FROM usuario WHERE UPPER(iduser) = UPPER(?) AND idempresa = ? AND COALESCE(estado,0) = 1`,
-      [iduser, idempresa],
+      `SELECT FIRST 1 u.iduser, u.nombre, u.apellido, u.idempresa, u.idtipo_usuario, u.estado, u.pass, u.hasta_vigencia,
+              (SELECT COUNT(*) FROM menu_general mg
+                 WHERE UPPER(TRIM(mg.iduser)) = UPPER(TRIM(u.iduser))
+                   AND CAST(TRIM(mg.idmenu) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)
+                   AND mg.permiso = 1
+                   AND mg.idempresa = u.idempresa) AS acceso_modulo
+         FROM usuario u
+        WHERE CAST(UPPER(TRIM(u.iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)
+          AND CAST(TRIM(u.idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)
+          AND COALESCE(u.estado,0) = 1`,
+      ['mnuArchivoPanelControl', idu, emp],
     );
     if (!rows.length) return null;
     const u = rows[0];
-    // pass se compara fuera (bcrypt o legacy plano)
+    // pass se compara fuera (bcrypt o legacy plano).
+    // acceso_modulo > 0 → el usuario tiene el menú 'mnuArchivoPanelControl' habilitado.
     return u;
   },
 
   async findById(iduser) {
     const rows = await query(
       'system',
-      `SELECT iduser, nombre, apellido, idempresa, idtipo_usuario, estado, documento, control, exclusion
-         FROM usuario WHERE UPPER(iduser) = UPPER(?)`,
-      [iduser],
+      `SELECT CAST(iduser   AS VARCHAR(10)  CHARACTER SET OCTETS) AS iduser,
+              CAST(nombre   AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+              CAST(apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
+              idempresa, idtipo_usuario, estado,
+              CAST(documento AS VARCHAR(40) CHARACTER SET OCTETS) AS documento,
+              control, exclusion, hasta_vigencia
+         FROM usuario
+        WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)`,
+      [String(iduser || '').trim().toUpperCase()],
     );
-    return rows[0] || null;
+    return rows[0] ? decodeRows([rows[0]], ['iduser', 'nombre', 'apellido', 'documento'])[0] : null;
   },
 
   async listar({ busqueda, idperfil, estado }) {
@@ -62,11 +83,18 @@ const UsuarioModel = {
       params.push(estado);
     }
     const first = limit != null ? `FIRST ${Number(limit)}` : '';
-    const extraCols = conPerfil ? ', COALESCE(t.descripcion, \'-\') AS perfil' : '';
+    // BD ASCII: castear texto a OCTETS para evitar "Cannot transliterate" al leer acentos/ñ.
+    const extraCols = conPerfil
+      ? ', CAST(COALESCE(t.descripcion, \'-\') AS VARCHAR(120) CHARACTER SET OCTETS) AS perfil' : '';
     const extraJoin = conPerfil
       ? 'LEFT JOIN tipo_usuario t ON t.idtipo_usuario = u.idtipo_usuario' : '';
     const sql = `
-      SELECT ${first} u.iduser, u.nombre, u.apellido, u.documento, u.idtipo_usuario, u.estado,
+      SELECT ${first}
+             CAST(u.iduser    AS VARCHAR(30)  CHARACTER SET OCTETS) AS iduser,
+             CAST(u.nombre    AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+             CAST(u.apellido  AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
+             CAST(u.documento AS VARCHAR(40)  CHARACTER SET OCTETS) AS documento,
+             u.idtipo_usuario, u.estado, u.hasta_vigencia,
              IIF((SELECT COUNT(*) FROM menu_general mg WHERE UPPER(TRIM(mg.iduser)) = UPPER(TRIM(u.iduser))) = 0, 1, 0) AS sin_menu,
              COALESCE(u.exclusion_permisos, 0) AS exclusion_permisos
              ${extraCols}
@@ -74,7 +102,8 @@ const UsuarioModel = {
         ${extraJoin}
        WHERE ${where.join(' AND ')}
        ORDER BY u.iduser`;
-    return query('system', sql, params);
+    const rows = await query('system', sql, params);
+    return decodeRows(rows, ['iduser', 'nombre', 'apellido', 'documento', 'perfil']);
   },
 
   /** Llama al SP que orquesta el alta completa en server + system. */
@@ -171,6 +200,36 @@ const UsuarioModel = {
     });
   },
 
+  /** Define (o limpia con null) la fecha de vigencia 'YYYY-MM-DD' del usuario. */
+  async setVigencia(iduser, hasta) {
+    return query(
+      'system',
+      `UPDATE usuario SET hasta_vigencia = CAST(? AS TIMESTAMP)
+        WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)`,
+      [hasta || null, String(iduser || '').trim().toUpperCase()],
+    );
+  },
+
+  /** Caduca (estado=0) los usuarios activos cuya vigencia ya venció. Devuelve los iduser afectados. */
+  async caducarVencidos() {
+    const cond = `hasta_vigencia IS NOT NULL AND hasta_vigencia < CURRENT_TIMESTAMP AND COALESCE(estado,0) = 1`;
+    const venc = await query('system',
+      `SELECT CAST(iduser AS VARCHAR(10) CHARACTER SET OCTETS) AS iduser FROM usuario WHERE ${cond}`);
+    if (!venc.length) return [];
+    await query('system', `UPDATE usuario SET estado = 0 WHERE ${cond}`);
+    return venc.map((v) => v.iduser);
+  },
+
+  /** Lee el BLOB binario crudo de la foto (Buffer) o null si no tiene. */
+  async getFotoRaw(iduser) {
+    return readBinaryBlob(
+      'system',
+      `SELECT foto FROM usuario
+        WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)`,
+      [String(iduser || '').trim().toUpperCase()],
+    );
+  },
+
   /**
    * Bloquea (estado=2) todos los usuarios activos (estado=1) que no tienen
    * ninguna entrada en menu_general. Excluye plantillas de roles y Admin.
@@ -197,8 +256,8 @@ const UsuarioModel = {
       'system',
       `SELECT FIRST 1 modo_print, talonario, descuento
          FROM usuarioempresa
-        WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`,
-      [iduser],
+        WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)`,
+      [String(iduser || '').trim().toUpperCase()],
     );
     return rows[0] || { modo_print: null, talonario: null, descuento: null };
   },
@@ -211,9 +270,10 @@ const UsuarioModel = {
       if (talonario  !== undefined) { sets.push('talonario = ?');  params.push(talonario); }
       if (descuento  !== undefined) { sets.push('descuento = ?');  params.push(descuento); }
       if (!sets.length) return 0;
-      params.push(iduser);
+      params.push(String(iduser || '').trim().toUpperCase());
       await tx.query(
-        `UPDATE usuarioempresa SET ${sets.join(', ')} WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`,
+        `UPDATE usuarioempresa SET ${sets.join(', ')}
+          WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)`,
         params,
       );
       return 1;
@@ -227,24 +287,32 @@ const UsuarioModel = {
     const [rows, totalRows] = await Promise.all([
       query(
         'server',
-        `SELECT h.id, h.usuario, h.idoperacion,
-                COALESCE(t.descripcion, CAST(h.idoperacion AS VARCHAR(10))) AS descripcion,
-                h.fecha, h.autorizacion, h.observacion
+        `SELECT h.id,
+                CAST(h.usuario AS VARCHAR(10) CHARACTER SET OCTETS) AS usuario,
+                h.idoperacion,
+                CAST(COALESCE(t.descripcion, CAST(h.idoperacion AS VARCHAR(10))) AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion,
+                h.fecha,
+                CAST(h.autorizacion AS VARCHAR(10) CHARACTER SET OCTETS) AS autorizacion,
+                h.observacion
            FROM historial_usuario h
            LEFT JOIN tipo_operacion t ON t.idtipo_operacion = h.idoperacion
-          WHERE UPPER(h.usuario) = UPPER(?)
+          WHERE CAST(UPPER(TRIM(h.usuario)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)
           ORDER BY h.id DESC
           ROWS ? TO ?`,
-        [iduser, offset + 1, offset + size],
+        [String(iduser || '').trim().toUpperCase(), offset + 1, offset + size],
       ),
       query(
         'server',
-        'SELECT COUNT(*) AS total FROM historial_usuario WHERE UPPER(usuario) = UPPER(?)',
-        [iduser],
+        `SELECT COUNT(*) AS total FROM historial_usuario
+          WHERE CAST(UPPER(TRIM(usuario)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)`,
+        [String(iduser || '').trim().toUpperCase()],
       ),
     ]);
     const total = Number(totalRows[0]?.total || 0);
-    return { rows, page: p, pageSize: size, total, totalPages: Math.ceil(total / size) || 1 };
+    return {
+      rows: decodeRows(rows, ['usuario', 'descripcion', 'autorizacion', 'observacion']),
+      page: p, pageSize: size, total, totalPages: Math.ceil(total / size) || 1,
+    };
   },
 };
 

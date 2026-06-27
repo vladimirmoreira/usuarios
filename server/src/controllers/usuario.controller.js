@@ -78,7 +78,7 @@ const UsuarioController = {
   async crear(req, res, next) {
     try {
       const rptUser = rptDe(req);
-      const { foto, ...rest } = req.body;
+      const { foto, hasta_vigencia, ...rest } = req.body;
 
       // Unicidad de documento (validación server-side)
       if (await UsuarioModel.existeDocumento(rest.documento)) {
@@ -89,6 +89,9 @@ const UsuarioController = {
 
       if (foto) {
         try { await UsuarioModel.actualizarFoto(rest.iduser, foto); } catch (_) { /* la foto no bloquea */ }
+      }
+      if (hasta_vigencia) {
+        try { await UsuarioModel.setVigencia(rest.iduser, hasta_vigencia); } catch (_) { /* no bloquea el alta */ }
       }
       res.status(201).json(result);
     } catch (e) { next(e); }
@@ -120,6 +123,9 @@ const UsuarioController = {
         iduser: req.params.iduser, rptUser: rptDe(req), ip: ipDe(req),
         nombre: req.body.nombre, apellido: req.body.apellido, documento: req.body.documento,
       });
+      if ('hasta_vigencia' in req.body) {
+        try { await UsuarioModel.setVigencia(req.params.iduser, req.body.hasta_vigencia || null); } catch (_) { /* no bloquea */ }
+      }
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -212,16 +218,34 @@ const UsuarioController = {
   async sucursalPrincipal(req, res, next) {
     try {
       const { query: fbQuery } = require('../config/firebird');
+      const { decodeRows } = require('../utils/charset');
       const rows = await fbQuery(
         'server',
-        `SELECT FIRST 1 us.idsucursal, s.nombre
+        `SELECT FIRST 1 us.idsucursal, CAST(s.nombre AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre
            FROM usuario_sucursal us
            JOIN sucursal s ON s.idsucursal = us.idsucursal
-          WHERE UPPER(us.iduser) = UPPER(?)
+          WHERE CAST(UPPER(TRIM(us.iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)
           ORDER BY us.orden, us.idsucursal`,
-        [req.params.iduser],
-      ).catch(() => []);
+        [String(req.params.iduser || '').trim().toUpperCase()],
+      ).then((r) => decodeRows(r, ['nombre'])).catch(() => []);
       res.json(rows[0] || null);
+    } catch (e) { next(e); }
+  },
+
+  /** GET /usuarios/:iduser/foto — sirve la imagen binaria (o 404 si no tiene). */
+  async foto(req, res, next) {
+    try {
+      const buf = await UsuarioModel.getFotoRaw(req.params.iduser);
+      if (!buf || !buf.length) return res.status(404).json({ error: 'El usuario no tiene foto' });
+      let mime = 'image/jpeg';
+      if (buf[0] === 0x89 && buf[1] === 0x50)      mime = 'image/png';
+      else if (buf[0] === 0x47 && buf[1] === 0x49) mime = 'image/gif';
+      else if (buf[0] === 0xff && buf[1] === 0xd8) mime = 'image/jpeg';
+      else if (buf[0] === 0x52 && buf[1] === 0x49) mime = 'image/webp';
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(req.params.iduser)}.${mime.split('/')[1]}"`);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.end(buf);
     } catch (e) { next(e); }
   },
 

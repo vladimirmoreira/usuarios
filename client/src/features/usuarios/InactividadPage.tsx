@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Search, Power, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { CatalogosAPI, UsuariosAPI, InactivoRow } from '../../api/endpoints';
+import { useConfirm } from '../../hooks/useConfirm';
 
 /**
  * Página: Usuarios candidatos a inactivación.
@@ -76,9 +77,31 @@ export default function InactividadPage() {
 
   const rows = verificarQ.data?.rows ?? [];
   const cargando = verificarQ.isFetching;
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm();
+
+  const onInhabilitarLote = async () => {
+    if (!await confirmDialog({
+      title: 'Inhabilitar usuarios',
+      message: `¿Inhabilitar ${seleccion.size} usuario(s)? Se ejecutará una BAJA completa (sistema, mesero, biométrico, master).`,
+      confirmLabel: 'Inhabilitar',
+      variant: 'danger',
+    })) return;
+    inhabilitarLote.mutate();
+  };
+
+  const onInhabilitarUno = async (iduser: string) => {
+    if (!await confirmDialog({
+      title: 'Inhabilitar usuario',
+      message: `¿Inhabilitar ${iduser}? Se ejecutará una BAJA completa.`,
+      confirmLabel: 'Inhabilitar',
+      variant: 'danger',
+    })) return;
+    inhabilitarUno.mutate(iduser);
+  };
 
   return (
     <div className="space-y-3">
+      <ConfirmDialog />
       {/* Cabecera */}
       <div className="card flex flex-wrap items-end justify-between gap-3 p-3">
         <div>
@@ -105,10 +128,7 @@ export default function InactividadPage() {
           {ejecutado && rows.length > 0 && (
             <button className="btn-outline border-rose-200 text-rose-700 hover:bg-rose-50"
                     disabled={seleccion.size === 0 || inhabilitarLote.isPending}
-                    onClick={() => {
-                      if (!confirm(`¿Inhabilitar ${seleccion.size} usuario(s)? Se ejecutará una BAJA completa (sistema, mesero, biométrico, master).`)) return;
-                      inhabilitarLote.mutate();
-                    }}>
+                    onClick={onInhabilitarLote}>
               <Power className="h-4 w-4" />
               Inhabilitar seleccionados ({seleccion.size})
             </button>
@@ -168,10 +188,7 @@ export default function InactividadPage() {
                     <td className="px-3 py-1.5 text-right">
                       <button className="btn-ghost p-1" title="Inhabilitar"
                               disabled={inhabilitarUno.isPending}
-                              onClick={() => {
-                                if (!confirm(`¿Inhabilitar ${r.iduser}? Se ejecutará una BAJA completa.`)) return;
-                                inhabilitarUno.mutate(r.iduser);
-                              }}>
+                              onClick={() => onInhabilitarUno(r.iduser)}>
                         <Power className="h-3.5 w-3.5 text-rose-600" />
                       </button>
                     </td>

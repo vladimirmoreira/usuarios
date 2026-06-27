@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, MapPin, Loader2, ChevronLeft, ChevronRight, CalendarDays, Zap, Trash2, Copy,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { UsuariosAPI, CatalogosAPI, type Usuario } from '../../api/endpoints';
 
 /* ── Helpers de fecha ─────────────────────────────────────────────────────── */

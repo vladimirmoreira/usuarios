@@ -2,8 +2,8 @@
 
 const { query, transaction } = require('../config/firebird');
 
-// Nota: SYSTEM no es palabra reservada en esta versión de Firebird
-const COLS = `ip, server, system, master, user_bd, clave,
+// Dialect 1: SYSTEM es palabra reservada. Columna real = SYSTEM_BD; alias SYS_CFG.
+const COLS = `ip, server, SYSTEM_BD AS SYS_CFG, MASTER_BD AS MASTER, user_bd, clave,
               legajo, biometrico, gastronomia, maximo,
               complementario, ruta_archivo, version_nro, autorizado,
               contabilidad, talento_humano, dias_inactividad,
@@ -27,13 +27,13 @@ const ConfiguracionModel = {
     return transaction('server', async (tx) => {
       await tx.query(
         `INSERT INTO configuracion_usuario
-           (ip, server, system, master, user_bd, clave,
+           (ip, server, SYSTEM_BD, MASTER_BD, user_bd, clave,
             legajo, biometrico, gastronomia, maximo,
             complementario, ruta_archivo, version_nro, autorizado,
             contabilidad, talento_humano, dias_inactividad, metadata_ejecutado)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          data.ip, data.server, data.system, data.master, data.user_bd, data.clave,
+          data.ip, data.server, data.sys_cfg, data.master, data.user_bd, data.clave,
           data.legajo ?? 0, data.biometrico ?? 0, data.gastronomia ?? 0,
           data.maximo ?? null, data.complementario ?? 0,
           data.ruta_archivo ?? null, data.version_nro ?? null, data.autorizado ?? null,
@@ -47,7 +47,7 @@ const ConfiguracionModel = {
   async actualizar(ip, data) {
     return transaction('server', async (tx) => {
       const MAP = {
-        server: 'server', system: 'system', master: 'master',
+        server: 'server', sys_cfg: 'SYSTEM_BD', master: 'MASTER_BD',
         user_bd: 'user_bd', clave: 'clave',
         legajo: 'legajo', biometrico: 'biometrico', gastronomia: 'gastronomia',
         maximo: 'maximo', complementario: 'complementario',

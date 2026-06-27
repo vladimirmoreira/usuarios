@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, ChangeEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, User, Upload, CheckCircle2, XCircle, Loader2, Wand2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { X, User, Upload, CheckCircle2, XCircle, Loader2, Wand2, ChevronDown, ChevronUp } from 'lucide-react';
+import toast from '../../lib/notify';
 import { z } from 'zod';
-import { CatalogosAPI, RolesAPI, Rol, UsuariosAPI } from '../../api/endpoints';
+import { CatalogosAPI, RolesAPI, Rol, UsuariosAPI, ConfiguracionAPI } from '../../api/endpoints';
 
 /* ── Esquema ───────────────────────────────────────────────────────── */
 const schema = z.object({
@@ -20,12 +20,12 @@ const schema = z.object({
 /* ── Tipos ─────────────────────────────────────────────────────────── */
 type FormState = {
   nombre: string; apellido: string; iduser: string;
-  documento: string; idperfil: number | ''; idsucursal: number | '';
+  documento: string; idperfil: number | ''; idsucursal: number | ''; hasta_vigencia: string;
 };
 type FormErrors = Partial<Record<keyof FormState, string>>;
 type AvailStatus = 'idle' | 'checking' | 'ok' | 'taken';
 
-const INITIAL: FormState = { nombre: '', apellido: '', iduser: '', documento: '', idperfil: '', idsucursal: '' };
+const INITIAL: FormState = { nombre: '', apellido: '', iduser: '', documento: '', idperfil: '', idsucursal: '', hasta_vigencia: '' };
 const MAX_FOTO = 2 * 1024 * 1024; // 2 MB
 
 /* ── Componente ────────────────────────────────────────────────────── */
@@ -44,9 +44,32 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
 
   const perfilesQ   = useQuery({ queryKey: ['perfiles-all'],   queryFn: () => RolesAPI.listar() });
   const sucursalesQ = useQuery({ queryKey: ['sucursales'], queryFn: CatalogosAPI.sucursales });
+  const flagsQ      = useQuery({ queryKey: ['cfg-flags'], queryFn: ConfiguracionAPI.flags });
+
+  // Sección Complementario (solo si la flag de configuración está activa)
+  const [showComp, setShowComp] = useState(false);
+  const [comp, setComp] = useState({ modo_print: '', talonario: '', descuento: '' });
+  const setCompField = (f: 'modo_print' | 'talonario' | 'descuento') =>
+    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setComp((prev) => ({ ...prev, [f]: e.target.value }));
 
   const mutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => UsuariosAPI.crear(payload),
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const res: any = await UsuariosAPI.crear(payload);
+      if (res?.ok === false) return res; // error del SP de alta
+      // Guardar complemento si la flag está activa y se cargó algún valor
+      if (flagsQ.data?.complementario &&
+          (comp.modo_print !== '' || comp.talonario !== '' || comp.descuento !== '')) {
+        try {
+          await UsuariosAPI.updateComplemento(String(payload.iduser), {
+            modo_print: comp.modo_print === '' ? null : Number(comp.modo_print),
+            talonario:  comp.talonario  === '' ? null : Number(comp.talonario),
+            descuento:  comp.descuento  === '' ? null : Number(comp.descuento),
+          });
+        } catch (_) { /* el usuario ya se creó; el complemento puede ajustarse luego en Editar */ }
+      }
+      return res;
+    },
     onSuccess: (res: any) => {
       if (res?.ok === false) { toast.error(res.mensaje || 'Error al crear el usuario'); return; }
       toast.success(res?.detalle ? `Usuario creado · ${res.detalle}` : 'Usuario creado correctamente');
@@ -173,6 +196,7 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
       idsucursal: Number(form.idsucursal),
     };
     if (fotoBase64) payload.foto = fotoBase64;
+    if (form.hasta_vigencia) payload.hasta_vigencia = form.hasta_vigencia;
     mutation.mutate(payload);
   };
 
@@ -192,7 +216,7 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     >
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+      <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl">
         {/* Cabecera */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-800">Agregar Usuario</h2>
@@ -202,14 +226,15 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
         </div>
 
         <form onSubmit={onSubmit} noValidate>
-          <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5">
+          <div className="max-h-[88vh] space-y-3 overflow-y-auto px-6 py-4">
 
-            {/* ── Foto ───────────────────────────────────────────── */}
-            <div className="flex flex-col items-center gap-1">
+            {/* ── Foto + datos principales ───────────────────────── */}
+            <div className="flex gap-4">
+            <div className="flex shrink-0 flex-col items-center gap-1">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="relative flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="relative flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 title="Haga clic para seleccionar foto"
               >
                 {fotoPreview
@@ -218,17 +243,17 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
                 }
               </button>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFotoChange} />
-              <span className="text-xs text-slate-500">Foto (opcional, máx. 2 MB)</span>
-              {fotoError && <p className="text-xs text-rose-600">{fotoError}</p>}
+              <span className="text-center text-[10px] leading-tight text-slate-500">Foto<br />(máx. 2&nbsp;MB)</span>
+              {fotoError && <p className="text-[10px] text-rose-600">{fotoError}</p>}
               {fotoPreview && (
-                <button type="button" onClick={quitarFoto} className="text-xs text-slate-400 underline hover:text-rose-600">
-                  Quitar foto
+                <button type="button" onClick={quitarFoto} className="text-[10px] text-slate-400 underline hover:text-rose-600">
+                  Quitar
                 </button>
               )}
             </div>
 
-            {/* ── Campos ─────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {/* ── Nombre / Apellido / Usuario ─────────────────────── */}
+            <div className="grid flex-1 grid-cols-2 gap-x-3 gap-y-2">
 
               {/* Nombre */}
               <div>
@@ -282,6 +307,11 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
                     : <p className="mt-0.5 text-xs text-slate-400">Inicial del nombre + apellido (máx. 10 chars)</p>
                 }
               </div>
+            </div>
+            </div>
+
+            {/* ── Documento / Perfil / Sucursal ───────────────────── */}
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2">
 
               {/* Documento */}
               <div>
@@ -347,7 +377,49 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
                 {errors.idsucursal && <p className="mt-0.5 text-xs text-rose-600">{errors.idsucursal}</p>}
               </div>
 
+              {/* Vigencia hasta (opcional) */}
+              <div>
+                <label className="label">Vigencia hasta</label>
+                <input type="date" value={form.hasta_vigencia} onChange={setField('hasta_vigencia')} className="input mt-1" />
+                <p className="mt-0.5 text-xs text-slate-400">Opcional — caduca el acceso</p>
+              </div>
+
             </div>
+
+            {/* ── Complementario (acordeón, solo si la flag de config está activa) ── */}
+            {flagsQ.data?.complementario && (
+              <div className="-mx-6 border-t border-slate-200 px-6">
+                <button
+                  type="button"
+                  onClick={() => setShowComp((v) => !v)}
+                  className="flex w-full items-center justify-between py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  <span>Complementario</span>
+                  {showComp ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                </button>
+                {showComp && (
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-2 pb-3">
+                    <div>
+                      <label className="label">Impresión</label>
+                      <select value={comp.modo_print} onChange={setCompField('modo_print')} className="input mt-1">
+                        <option value="">—</option>
+                        <option value={0}>Directa</option>
+                        <option value={1}>Cola de impresión</option>
+                        <option value={2}>Dual</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Talonario</label>
+                      <input type="number" min={0} value={comp.talonario} onChange={setCompField('talonario')} className="input mt-1" />
+                    </div>
+                    <div>
+                      <label className="label">Descuento</label>
+                      <input type="number" min={0} step="0.01" value={comp.descuento} onChange={setCompField('descuento')} className="input mt-1" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Pie */}

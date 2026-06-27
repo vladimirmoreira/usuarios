@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/firebird');
+const { decodeRows } = require('../utils/charset');
 const ConfiguracionModel = require('./configuracion.model');
 
 /**
@@ -36,7 +37,7 @@ const InactividadModel = {
          FROM registro
         WHERE usuario IS NOT NULL
         GROUP BY TRIM(UPPER(usuario))
-        HAVING MAX(fecha) < DATEADD(-${dias} DAY TO CURRENT_DATE)`,
+        HAVING MAX(fecha) < DATEADD(-${dias} DAY TO CURRENT_TIMESTAMP)`,  /* dialect 1 */
     );
     if (!ultimos.length) return { dias, rows: [] };
 
@@ -46,9 +47,11 @@ const InactividadModel = {
     const placeholders = ids.map(() => '?').join(',');
     const perfilCond = idperfilFiltro != null ? 'AND u.idtipo_usuario = ?' : '';
 
-    const usuarios = await query(
+    const usuarios = decodeRows(await query(
       'system',
-      `SELECT TRIM(UPPER(u.iduser)) AS iduser, u.nombre, u.apellido,
+      `SELECT TRIM(UPPER(u.iduser)) AS iduser,
+              CAST(u.nombre   AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+              CAST(u.apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
               u.idtipo_usuario
          FROM usuario u
         WHERE COALESCE(u.estado,0) = 1
@@ -61,7 +64,7 @@ const InactividadModel = {
           AND TRIM(UPPER(u.iduser)) IN (${placeholders})
           ${perfilCond}`,
       idperfilFiltro != null ? [...ids, idperfilFiltro] : ids,
-    );
+    ), ['nombre', 'apellido']);
 
     const fechaPorUser = new Map(ultimos.map((r) => [r.iduser, r.ultima_fecha]));
     const hoy = new Date();

@@ -1,0 +1,81 @@
+===========================================================================================================================
+Compilar: 
+	cd client
+	npm run build
+===========================================================================================================================
+Instalar en servidor:
+	Crear directorio en /opt/nginx/usuarios
+	Permiso total al directorio usuarios.
+	client/dist (copiar todo el contenido al directorio usuarios)
+===========================================================================================================================
+
+===========================================================================================================================
+El proceso de nginx no tiene permisos para leer los archivos. Aunque el directorio /opt/nginx/usuarios tenga permisos, nginx corre como usuario nginx (o www-data) y necesita permisos de lectura en todos los directorios padre del path y en los archivos mismos.
+
+Ejecuta esto en el servidor:
+
+# Ver con qué usuario corre nginx
+grep -r "^user" /etc/nginx/nginx.conf
+
+# Corregir permisos de los archivos (lectura para todos)
+chmod -R 755 /opt/nginx/usuarios
+chmod 755 /opt /opt/nginx
+
+# O alternativamente, dar ownership al usuario nginx
+chown -R nginx:nginx /opt/nginx/usuarios
+
+===========================================================================================================================
+Causa probable: Copiaste los archivos como root u otro usuario, y los permisos quedaron en 700 o 600, negando acceso al usuario del worker de nginx.
+
+Pasos concretos en el servidor:
+# 1. Verificar usuario de nginx
+ps aux | grep nginx
+
+# 2. Ver permisos actuales
+ls -la /opt/nginx/usuarios/
+ls -la /opt/nginx/
+ls -la /opt/
+
+# 3. Aplicar fix
+chmod 755 /opt /opt/nginx /opt/nginx/usuarios
+chmod -R 644 /opt/nginx/usuarios/*
+find /opt/nginx/usuarios -type d -exec chmod 755 {} \;
+
+# 4. Reiniciar nginx
+systemctl restart nginx
+
+El comando clave es find ... -type d -exec chmod 755 para directorios y 644 para archivos. Directorios necesitan x para ser atravesados, archivos solo r para ser leídos.
+===========================================================================================================================
+El fix es crear un archivo .env.production con la URL correcta del servidor y recompilar. Asumiendo que el backend Node corre en el mismo servidor en el puerto 3001
+
+.env.production -> client -> configurar aqui la url -> VITE_API_URL=http://12.168.192.204:3001/api
+===========================================================================================================================
+
+chmod 755 /opt /opt/nginx /opt/nginx/usuarios
+find /opt/nginx/usuarios -type d -exec chmod 755 {} \;
+find /opt/nginx/usuarios -type f -exec chmod 644 {} \;
+systemctl restart nginx
+===========================================================================================================================
+
+
+
+SERVER
+===========================================================================================================================
+cd directorio server
+npm i
+
+editar .env y cambiar el puerto 3001 a 10024
+npm run start
+
+
+
+1] UI: Visualizar en la vista Explorador el Estado y Mensaje del visor FE.
+	- Módulos de Venta, Remisión/ Transferencias, Notas de Crédito.
+	- Capacidad de filtrar por Estado FE.
+2] Validación: Si es diplomático no editar campo del detalle en Gravada.
+	- Módulos de Venta, Pedido, Remisión/ Transferencias, Notas de Crédito.  
+3] El usuario 44444401-7 nunca debe ser distinto al idtipo_doc_set 15.
+4] Si subió a SIFEN marcar en Persona o tabla paralela.
+	- No modificar por UI (Excepto proceso que envía y detecta, la primera vez).
+	- Registrar Idpersona/ Idtipo_doc_set/ Tipo del idtipomovimiento (1era operación).
+	- De física a otra persona es otro contribuyente -> tratar en siguiente reunión.

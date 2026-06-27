@@ -357,7 +357,7 @@ En `scope === 'rol'` los 5 campos no se muestran ni se envían — así, guardar
 - Si un usuario no tiene fila en `usuarioempresa`, se crea con valores en blanco al primer `GET /accesos/:iduser`.
 - Si no tiene filas en `menu_general`, se **copia desde Admin** con `permiso=0` (todo bloqueado por defecto).
 
-### 5.7 Inicialización perezosa
+### 5.7 Auditoría de operaciones
 
 Toda alta/baja/cambio operativo (reset clave, reasignación, cambio de perfil) pasa por la función `auditar()` / `auditarDirecto()` en `utils/audit.js`, que llama a `HistorialModel.registrar()` con `idoperacion` de `operaciones.config.js`. La auditoría es **best-effort**: nunca bloquea la operación de negocio en caso de error.
 
@@ -379,7 +379,7 @@ Toda alta/baja/cambio operativo (reset clave, reasignación, cambio de perfil) p
 | 12 | Inicio de Sesión |
 | 13 | Intento de Login Fallido |
 
-### 5.8 Auditoría de operaciones
+### 5.8 Detección de inactividad
 
 El modelo `InactividadModel.listar(umbralDias?, {idperfilFiltro?})`:
 
@@ -391,18 +391,18 @@ El umbral `N` se toma de `CONFIGURACION_USUARIO.DIAS_INACTIVIDAD` (via `Configur
 
 La inhabilitación pasa siempre por `OperacionesService.bajaUsuario()` (cadena completa: `estado=0` + GG_MESERO + biometría + master + auditoría). El lote se re-valida antes de procesar cada usuario para evitar race conditions. Límite `MAX_BATCH=100`.
 
-### 5.9 Detección de inactividad
+### 5.9 Middleware `requireAuthorized`
 
 Rutas sensibles (`/inactividad`, `/inactividad/inhabilitar`, `/export.csv`) requieren que el usuario autenticado tenga `CONFIGURACION_USUARIO.AUTORIZADO = 1` para su IP. Devuelve `403` si no tiene ese flag.
 
-### 5.10 Middleware `requireAuthorized`
+### 5.10 Encoding / Firebird 2.5
 
 - Charset `UTF8` en pool y request.
 - **No usar comillas dobles** alrededor de identificadores en minúscula: Firebird hace case‑sensitive y rompe la búsqueda.
 - **No usar `AUTONOMOUS TRANSACTION`** desde Node: una transacción por request.
 - CSV exportado con BOM `\uFEFF` + separador `;` + CRLF para máxima compatibilidad con Excel en Windows.
 
-### 5.11 Encoding / Firebird 2.5
+### 5.11 Importación masiva — reglas de negocio
 
 1. **Validación en dos fases**: cliente (duplicados de documento, campos vacíos) y server (perfil habilitado y con plantilla configurada, documento no duplicado en BD, sucursal activa, iduser generado sin colisión de lote).
 2. **Perfil sin plantilla** (`tipo_usuario.iduser IS NULL`): detectado en la fase de validación con mensaje `"perfil X no tiene usuario-plantilla configurado"`. No llega a ejecución.
@@ -413,16 +413,42 @@ Rutas sensibles (`/inactividad`, `/inactividad/inhabilitar`, `/export.csv`) requ
 7. **Post-effects best-effort**: auditoría, legajo, GG_MESERO y masterSync se ejecutan fuera de la transacción principal. Errores en post-effects se reportan pero no revierten la importación.
 8. **TXT de errores en Escritorio**: si hay errores de validación, se escribe `errImportacionUsuario_DDMMAAAA.txt`. En Windows usa `USERPROFILE` (tolera OneDrive/redirección).
 
-### 5.12 Importación masiva — reglas de negocio
+### 5.12 Charset legacy (Firebird ASCII) y lectura de BLOBs
 
-1. **Validación en dos fases**: cliente (duplicados de documento, campos vacíos) y server (perfil habilitado y con plantilla configurada, documento no duplicado en BD, sucursal activa, iduser generado sin colisión de lote).
-2. **Perfil sin plantilla** (`tipo_usuario.iduser IS NULL`): detectado en la fase de validación con mensaje `"perfil X no tiene usuario-plantilla configurado"`. No llega a ejecución.
-3. **Perfil inactivo** vs **inexistente**: mensajes diferenciados para orientar al operador.
-4. **iduser único por lote**: `_sugerirUnico(nombre, apellido, reservadosEnLote)` consulta la BD y lleva un `Set` interno para evitar colisiones entre filas del mismo archivo.
-5. **Transacción atómica**: `OperacionesService.altasBatch()` ejecuta todos los `INSERT` en una única `TRANSACTION('system')`. Si cualquier paso falla, ROLLBACK completo — ningún usuario queda a medias.
-6. **Logging de tabla**: cada INSERT está envuelto en `step(label, sql, params)` que enriquece el error con `[TABLA_AFECTADA]` para diagnóstico rápido.
-7. **Post-effects best-effort**: auditoría, legajo, GG_MESERO y masterSync se ejecutan fuera de la transacción principal. Errores en post-effects se reportan pero no revierten la importación.
-8. **TXT de errores en Escritorio**: si hay errores de validación, se escribe `errImportacionUsuario_DDMMAAAA.txt`. En Windows usa `USERPROFILE` (tolera OneDrive/redirección).
+> **Lectura obligatoria antes de escribir cualquier query nuevo contra las BD `orgonita_*`.**
+
+**El problema.** Las bases `orgonita_system` / `orgonita_server` / `orgonita_master` están declaradas con `CHARACTER SET ASCII` (datos cargados por el ERP Delphi, con acentos/ñ guardados como bytes latin1 > 127). El driver `node-firebird@1.1.10` **ignora** la opción de charset de conexión (no hay manejo de charset en su código), por lo que conecta efectivamente como `NONE`. Resultado:
+
+- **Al LEER** una columna de texto cuyo valor tiene bytes > 127, Firebird intenta transliterar al charset de la conexión y aborta con:
+  `Arithmetic exception, numeric overflow, or string truncation — Cannot transliterate character between character sets`.
+  El síntoma típico es una **grilla/combo vacío** (si el query tenía `.catch(() => [])`) o un **HTTP 500** "error interno".
+- **Las comparaciones con parámetro** (`WHERE UPPER(iduser) = UPPER(?)`, `LIKE ?`) **NO** disparan el error — fueron verificadas. Solo rompe la **lectura** de texto acentuado y la lectura de **BLOBs** de texto.
+- Cambiar `*_CHARSET` en el `.env` (WIN1252/ISO8859_1/UTF8) **no surte efecto** porque el driver lo ignora. Se deja en `NONE`.
+
+**La solución (centralizada).** En `server/src/config/firebird.js`, `query()` y `tx.query()` pasan cada fila por `resolveRow()`:
+
+| Valor recibido del driver | Origen | Conversión en `resolveRow` |
+|---|---|---|
+| `function`  | columna **BLOB** | `readBlob()` lee por *emitter* y devuelve string **utf8** |
+| `Buffer`    | columna casteada a **OCTETS** | `.toString('latin1')` (recupera acentos/ñ) |
+| otro        | numérico/fecha   | tal cual |
+
+Esto es el mismo patrón usado en el proyecto **Proyectos** (`config/db.js`). El helper `server/src/utils/charset.js` (`decodeRows`) quedó como ayuda puntual pero es **redundante** con el mapper central (inofensivo).
+
+**Cómo escribir queries nuevos (reglas).**
+
+1. **Columnas de texto VARCHAR/CHAR** (nombre, apellido, descripcion, titulo, etc.): castearlas a OCTETS en el `SELECT` para que Firebird devuelva los bytes crudos en vez de abortar:
+   ```sql
+   SELECT CAST(u.nombre AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre
+   ```
+   El mapper central las decodifica a string automáticamente (no hace falta `decodeRows`). La longitud del `CAST` debe ser ≥ a la de la columna.
+2. **BLOBs de texto** (p. ej. `HISTORIAL_USUARIO.OBSERVACION`, SUB_TYPE 1): **NO** castear — dejar la columna tal cual (`h.observacion`). El driver la entrega como función y `readBlob()` la lee completa por emitter.
+3. **Comparaciones por parámetro**: funcionan sin OCTETS. (En el login y en lecturas por `iduser` se usa igualmente el casteo OCTETS en ambos lados por robustez; ambas formas son válidas.)
+4. **BLOB binario** (`USUARIO.FOTO`, imagen): **no** debe pasar por el decode utf8 del mapper (lo corrompería). Se lee con `firebird.js readBinaryBlob()` (lectura cruda por *emitter* → `Buffer`, sin decodificar a texto) y se sirve en `GET /api/usuarios/:iduser/foto` (mime detectado por la firma del archivo, `404` si no tiene). La ficha de usuario (`FichaUsuarioReporte` → componente `FotoUsuario`) la muestra con botones **copiar** (a portapapeles vía canvas→PNG) y **descargar**. La escritura sigue siendo `UsuarioModel.actualizarFoto` (base64→`Buffer`).
+
+**Modelos con OCTETS aplicado** (lecturas de texto): `usuario.model` (grilla, ficha, historial), `catalogo.model` (todos los combos), `rol.model`, `menu.model`, `inactividad.model`, `historial.model`, `concepto.model`, `master.model`, `usuarioSucursal.model`, `reportes.service`, `usuario.controller` (sucursal-principal).
+
+**Login y charset.** `usuario.model.findByCredentials` valida contra `MENU_GENERAL` con casteos OCTETS en las comparaciones (`idmenu`, `iduser`, `idempresa`) — ver §login. El gate exige `idmenu='mnuArchivoPanelControl'`, `permiso=1`, misma empresa.
 
 ### 5.13 Configuración — "¿Qué Ocurre?"
 
@@ -675,25 +701,84 @@ npm run dev
 | Pestaña Movimientos no aparece | `mnuAdminMovimientos` deshabilitado en Menú | Habilitarlo y guardar; la pestaña reaparece. |
 | `403 Forbidden` en `/inactividad` o `/export.csv` | IP del operador no tiene `AUTORIZADO=1` | En Configuración del entorno, habilitar el flag `Autorizado` para la IP correspondiente. |
 | Job cron no arranca | `ENABLE_INACTIVIDAD_JOB` o `ENABLE_TURNO_SUCURSAL_JOB` no está en `.env` | Agregar las variables al `.env` del server. |
-| Historial sin descripción de operación | `TIPO_OPERACION` vacía | Ejecutar `node sql/run-migration.js 03_login_audit.sql`. |
-| DDL falla con error `-817` en Firebird | `run-migration.js` usa `db.query()` que rechaza DDL en dialect 1 | Usar `db.execute()` en un script separado (ver `server/sql/06_run_turno_sucursal.js` como modelo). |
+| Historial sin descripción de operación | `TIPO_OPERACION` vacía | Ejecutar "Inicializar metadatos" desde la UI de Configuración. |
+| DDL falla con `-817` en Firebird dialect 1 | DDL dentro de transacción explícita **o** identificador entre comillas dobles | En dialect 1, las comillas dobles son literales de string — no delimitadores. Usar `db.query()` directo (fuera de `transaction()`). Nombre de tabla `TMP$X` sin comillas. |
+| `Column unknown, SYSTEM` en `configuracion_usuario` | `SYSTEM` es palabra reservada en Firebird | La columna real se llama `SYSTEM_BD`; el modelo la expone con alias `SYS_CFG`. |
+| `-303 string right truncation` en `TRIM(?)` | Firebird dialect 1 no puede inferir el tipo del parámetro | Usar `TRIM(CAST(? AS VARCHAR(20)))` explícito. |
+| `Column unknown, T.IDUSER` en `tipo_usuario` | Columna agregada por migración pero sin commit | Ejecutar "Inicializar metadatos" desde la UI (corre `migrarDDL()` con commit automático). |
 | Propagación muestra panel ámbar con usuarios | Usuarios sin `documento` en BD — constraint Firebird impide UPDATE | Completar documento en cada usuario afectado y volver a propagar. |
 
 ---
 
-## 10. Backlog / Próximos pasos
+## 9b. Despliegue en producción (Rocky Linux + nginx + PM2)
 
-| Prioridad | Ítem | Notas |
-|---|---|---|
-| Alta | **Legajos** | Vinculación con `LEGAJO` (talento humano): datos personales extendidos, foto, contrato. |
-| Alta | **Prueba‑error** | Dado un usuario y un movimiento, visualizar cada flag evaluado paso a paso. |
-| Media | **Biometría** | Enrollment de huellas, sincronización con Suprema / ZKTeco, tabla `BIOMETRICO`. |
-| Baja | **Tests E2E** | Playwright: login → alta usuario → asignar rol → editar accesos → verificar persistencia. |
-| Baja | **Migrar `USUARIO_CONCEPTO` a DELETE+INSERT** | Consistencia con sucursales/depósitos, preservando 5 campos extra. |
+### Estructura en servidor
 
-### Decisiones tomadas (no revisitar)
+```
+/opt/nginx/usuarios/
+├── dist/          ← build del cliente (servido por nginx en :10025)
+└── server/        ← backend Node
+    ├── .env
+    ├── ecosystem.config.js
+    ├── package.json
+    └── src/
+```
 
-- Cambio de rol = **Reemplazar todo** (idop=6 ya lo hace en el SP).
+### nginx — configuración mínima
+
+```nginx
+server {
+    listen 10025;
+    root /opt/nginx/usuarios/dist;
+    index index.html;
+    location / { try_files $uri $uri/ /index.html; }
+    location /api/ { proxy_pass http://localhost:10024; proxy_set_header Host $host; }
+}
+```
+
+Permisos del directorio:
+```bash
+chmod -R 755 /opt/nginx/usuarios/dist
+```
+
+### PM2
+
+```bash
+cd /opt/nginx/usuarios/server
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup
+```
+
+`ecosystem.config.js` define `PORT=10024`, `cwd`, rutas de log en `/var/log/nginx/usuarios/`.
+
+### Variables `.env` de producción
+
+```env
+PORT=10024
+NODE_ENV=production
+CORS_ORIGIN=http://12.168.192.204:10025    # separar con coma si hay varios orígenes
+JWT_SECRET=<secreto-largo>
+# pools SYSTEM_*, SERVER_*, MASTER_* con IPs y rutas de BD reales
+```
+
+### Proceso de actualización
+
+| Qué cambió | Pasos |
+|---|---|
+| Solo código `server/src/**` | Copiar archivos → `pm2 restart usuarios-api` |
+| Solo frontend (`client/src/**`) | `npm run build` en Windows → copiar `client/dist/` al servidor → reload nginx |
+| Ambos | Copiar server + copiar dist → `pm2 restart` → reload nginx |
+
+> **Nota Firebird dialect 1**: las BDs legacy operan en dialect 1. El driver `node-firebird` requiere:  
+> - No usar comillas dobles en nombres de tabla/columna (son literales en dialect 1).  
+> - `CURRENT_DATE` no existe → usar `CURRENT_TIMESTAMP`.  
+> - `DATE` no existe como tipo → usar `TIMESTAMP`.  
+> - `BOOLEAN` no existe → usar `SMALLINT`.  
+> - DDL (`CREATE TABLE`, `ALTER TABLE`) ejecutado con `db.query()` directo, fuera de `transaction()`.  
+> - Parámetros en funciones como `TRIM(?)` requieren cast explícito: `TRIM(CAST(? AS VARCHAR(N)))`.
+
+
 
 ---
 
@@ -773,7 +858,7 @@ El módulo actualmente replica **hacia** el legado (master sync, GG_MESERO). Una
 
 ---
 
-## 11. Convenciones de código
+## 12. Convenciones de código
 
 - **Imports absolutos** desde `src/` en el cliente.
 - **Sin docstrings en código que no se tocó**.
@@ -790,7 +875,7 @@ El módulo actualmente replica **hacia** el legado (master sync, GG_MESERO). Una
 
 ---
 
-## 12. Tareas pendientes — próxima sesión (30-05-2026)
+## 13. Tareas pendientes — próxima sesión (30-05-2026)
 
 ### 🔴 Bloqueantes
 
@@ -814,462 +899,3 @@ El módulo actualmente replica **hacia** el legado (master sync, GG_MESERO). Una
 | 6 | **Botón "Descargar errores" en el modal** | Actualmente el TXT solo se escribe en el servidor. Agregar descarga Blob client-side para que el operador no tenga que ir al Escritorio del servidor. |
 | 7 | **`iduser sugerido` en tabla de errores de ejecución** | Ya está disponible en `erroresEjecucion[].iduser`; mostrarlo prominentemente en la grilla del modal. |
 | 8 | **Legajos** | Alta prioridad del roadmap. Vinculación con `RH_CARGO.user_system` y datos de persona. |
-
-## 1. Resumen ejecutivo
-
-El módulo administra el ciclo de vida completo de los **usuarios** y sus **accesos** distribuidos en múltiples ejes, replicando 1‑a‑1 la lógica de negocio del sistema legado pero con una capa de UI/UX moderna, API REST tipada y validación exhaustiva.
-
-### 1.1 Funcionalidades implementadas
-
-| # | Módulo | Estado | Descripción |
-|---|---|---|---|
-| 1 | **Login / JWT** | ✅ | Access (15 min) + refresh (7 d), guard de rutas, claims `iduser/idperfil/idempresa`. |
-| 2 | **Usuarios — CRUD** | ✅ | Alta (SP `PCD_USUARIO`), baja lógica, edición, sugerencia de `iduser`, validación de documento. |
-| 3 | **Usuarios — Operaciones** | ✅ | Reset clave, reasignar sucursal, cambiar perfil — todas vía `PCD_OPERACIONES` (auditadas). |
-| 4 | **Usuarios — DataGrid** | ✅ | Buscador, filtros (perfil, estado), selección naranja, accesos directos a edición y permisos. |
-| 5 | **Usuarios — Complemento** | ✅ | `modo_print`, `talonario`, `descuento` opcionales por usuario. |
-| 6 | **Roles / Perfiles** | ✅ | CRUD de `TIPO_USUARIO` + edición de plantilla compartiendo el editor de Accesos. |
-| 7 | **Accesos — Menú Gestión** | ✅ | `MENU_GENERAL` jerárquico con flag `PERMISO 0/1`. |
-| 8 | **Accesos — Permisos Generales** | ✅ | `USUARIOEMPRESA.PERMISOS` (string S/N de 50 posiciones). |
-| 9 | **Accesos — Movimientos** | ✅ | `USUARIOEMPRESA.MOVIMIENTOS` (string S/N) + sincronización con `mnuAdmMovimientos{N}`. |
-| 10 | **Accesos — Conceptos** | ✅ | `USUARIO_CONCEPTO` por tipo de movimiento: permiso + `permiso_varios` (15 chars). |
-| 11 | **Accesos — Personalización por usuario** | ✅ | 5 overrides en `USUARIO_CONCEPTO`: talonario, vendedor, persona, planventa, condición. |
-| 12 | **Accesos — Punto de Venta** | ✅ | `USUARIOEMPRESA.MENU_GG_2` + catálogo `TMP$USUARIO_PERMISOS_PDV`. |
-| 13 | **Accesos — Contab. / RRHH** | ✅ | `USUARIOEMPRESA.PERMISO_GG` por módulo con sub‑permisos. |
-| 14 | **Accesos — Sucursales** | ✅ | `USUARIO_SUCURSAL` (DELETE+INSERT, sin PK en legacy). |
-| 15 | **Accesos — Depósitos** | ✅ | `USUARIO_DEPOSITO` (salida) + `USUARIO_DEPOSITO1` (entrada). |
-| 16 | **Catálogos públicos** | ✅ | Perfiles, sucursales, depósitos, talonarios, vendedores, planventas, condiciones. |
-| 17 | **Configuración del entorno** | ✅ | `CONFIGURACION_USUARIO` por IP (admite `localhost`), flag `AUTORIZADO/MASTER`. |
-| 18 | **Auditoría** | 🟡 pendiente | Pestaña de visualización de `HISTORIAL_USUARIO`. |
-| 19 | **Legajos** | 🟡 pendiente | Datos de RRHH del usuario (vinculación con `LEGAJO`). |
-| 20 | **Biometría** | 🟡 pendiente | Captura/enrollment huella + sincronización dispositivos. |
-| 21 | **Importación masiva** | 🟡 pendiente | CSV/Excel para alta batch. |
-| 22 | **Tests E2E** | 🟡 pendiente | Playwright cubriendo flujos críticos. |
-
-### 1.2 Mejoras frente al sistema original
-
-- **UI minimalista, densa y responsive** (React + Tailwind), reemplazando el WinForms con grillas compactas tipo legado pero con tipografía consistente.
-- **Capa de servicio** que oculta los strings posicionales (`S/N`, `0/1`) y expone JSON tipado.
-- **JWT** en lugar de sesiones Firebird directas.
-- **Transacciones explícitas** desde Node (`node-firebird`) en vez de `AUTONOMOUS TRANSACTION` anidadas dentro de SPs (se mantiene compatibilidad con los SP existentes cuando aportan valor — ej. `PCD_OPERACIONES`).
-- **Validación Zod** simétrica en cliente y servidor; errores normalizados.
-- **Multi-cliente / multi-empresa** vía `.env` (un par de BDs `system` + `server` por instalación).
-
----
-
-## 2. Arquitectura
-
-```
-Usuarios/
-├── README.md
-├── BaseDatos.txt              # notas de DDL del sistema legado
-├── package.json               # monorepo (scripts dev/build)
-├── server/                    # API REST (Node 20 + Express 4) — MVC
-│   ├── package.json
-│   ├── src/
-│   │   ├── app.js                 # bootstrap Express (helmet, cors, rate-limit)
-│   │   ├── server.js              # listen
-│   │   ├── config/
-│   │   │   ├── env.js             # carga + valida .env
-│   │   │   └── firebird.js        # pools system + server, helpers query/transaction
-│   │   ├── middlewares/
-│   │   │   ├── auth.js            # verify JWT
-│   │   │   ├── error.js           # handler central
-│   │   │   └── validate.js        # Zod
-│   │   ├── models/                # acceso a datos
-│   │   │   ├── usuario.model.js
-│   │   │   ├── menu.model.js
-│   │   │   ├── permiso.model.js
-│   │   │   ├── catalogo.model.js
-│   │   │   ├── concepto.model.js
-│   │   │   ├── configuracion.model.js
-│   │   │   ├── rol.model.js
-│   │   │   ├── usuarioSucursal.model.js
-│   │   │   └── usuarioDeposito.model.js
-│   │   ├── controllers/
-│   │   │   ├── auth.controller.js
-│   │   │   ├── usuario.controller.js
-│   │   │   ├── accesos.controller.js
-│   │   │   ├── rol.controller.js
-│   │   │   ├── catalogo.controller.js
-│   │   │   └── configuracion.controller.js
-│   │   ├── services/              # lógica de negocio (encode/decode posicional)
-│   │   │   ├── permisos.service.js
-│   │   │   └── accesos.service.js
-│   │   ├── routes/
-│   │   │   ├── index.js
-│   │   │   ├── auth.routes.js
-│   │   │   ├── usuario.routes.js
-│   │   │   ├── accesos.routes.js
-│   │   │   ├── rol.routes.js
-│   │   │   ├── catalogo.routes.js
-│   │   │   └── configuracion.routes.js
-│   │   └── utils/
-│   │       ├── logger.js          # pino
-│   │       └── jwt.js
-│   └── test-query.js              # script de prueba de queries
-│
-└── client/                    # SPA React 18 + Vite + TS + Tailwind
-    ├── package.json
-    ├── tailwind.config.js
-    ├── vite.config.ts
-    ├── index.html
-    └── src/
-        ├── main.tsx
-        ├── App.tsx
-        ├── api/
-        │   ├── client.ts          # axios + interceptor JWT
-        │   └── endpoints.ts       # tipos + funciones API
-        ├── auth/
-        │   └── AuthContext.tsx
-        ├── components/
-        │   └── layout/AppLayout.tsx
-        ├── features/
-        │   ├── login/LoginPage.tsx
-        │   ├── usuarios/
-        │   │   ├── UsuariosPage.tsx
-        │   │   └── UsuariosDataGrid.tsx
-        │   ├── roles/RolesPage.tsx
-        │   ├── auditoria/
-        │   │   └── AuditoriaPage.tsx      # datagrid global HISTORIAL_USUARIO + filtros + CSV + print
-        │   ├── reportes/
-        │   │   ├── ReportesPage.tsx       # selector tipo (usuario/rol) + buscador + imprimir
-        │   │   ├── FichaUsuarioReporte.tsx
-        │   │   └── FichaRolReporte.tsx
-        │   ├── configuracion/ConfiguracionPage.tsx
-        │   └── accesos/
-        │       ├── AccesosPage.tsx       # editor modo "usuario"
-        │       ├── RoleAccesosPage.tsx   # editor modo "rol"
-        │       ├── AccesosEditor.tsx     # contenedor con tabs
-        │       └── tabs/
-        │           ├── MenuTab.tsx
-        │           ├── FlagsTab.tsx           # reusado por Permisos, Movimientos, etc.
-        │           ├── PdvTab.tsx
-        │           ├── ConceptosTab.tsx       # + ConfigAdicionalesPanel
-        │           ├── SucursalesTab.tsx
-        │           └── DepositosTab.tsx
-        └── styles/index.css
-```
-
-### 2.1 Flujo de datos
-
-```mermaid
-flowchart LR
-    UI[React SPA] -- JWT Bearer --> API[Express API]
-    API --> SYS[(Firebird: system_*)]
-    API --> SRV[(Firebird: server_*)]
-    SYS -.SP PCD_USUARIO.-> SRV
-    SRV -.SP PCD_OPERACIONES.-> SYS
-```
-
-### 2.2 Convención clave: rol == usuario plantilla
-
-En el legacy, los roles **son usuarios sintéticos** con un `iduser` propio almacenado en `tipo_usuario.iduser`. Las tablas `usuario_concepto`, `usuario_sucursal`, `usuario_deposito*`, `menu_general`, `usuarioempresa` se llenan tanto para usuarios reales como para roles‑plantilla. El SP `PCD_OPERACIONES idoperacion=6` (cambio de perfil) **replica todos los registros desde la plantilla del rol al usuario** — esto se mantuvo, así "cambiar de perfil" es **Reemplazar todo**.
-
-El componente `AccesosEditor` recibe una prop `scope: 'rol' | 'usuario'` que activa/desactiva la personalización por usuario sin duplicar código.
-
----
-
-## 3. Tecnologías
-
-| Capa | Tecnología | Motivo |
-|---|---|---|
-| Frontend | **React 18 + Vite + TypeScript** | DX rápida, build optimizado, tipado estricto. |
-| UI | **Tailwind CSS** + **lucide-react** | Diseño consistente, iconos vectoriales. |
-| Estado servidor | **@tanstack/react-query v5** | Cache, invalidaciones, lazy loading por pestaña. |
-| Tablas | **@tanstack/react-table** | Grillas virtualizadas. |
-| Notificaciones | **react-hot-toast** | Toasts no bloqueantes. |
-| Validación | **Zod v3** | Esquemas compartidos client/server. |
-| HTTP | **axios** | Interceptores, manejo de errores. |
-| Backend | **Node.js 20 + Express 4** | Maduro, ecosistema amplio. |
-| DB driver | **node-firebird** | Driver puro JS para Firebird 2.5+. |
-| Auth | **jsonwebtoken** + bcrypt | JWT HS256 + hash de claves. |
-| Logs | **pino** | JSON estructurado, alto rendimiento. |
-| Lint | **eslint** + **prettier** | Estilo uniforme. |
-| Encoding | **UTF‑8** end‑to‑end | Charset Firebird `UTF8`, headers HTTP. |
-
----
-
-## 4. Configuración multi-cliente
-
-Cada instalación se gestiona con un `.env` por backend cambiando los nombres de base.
-
-```env
-# server/.env
-PORT=3001
-NODE_ENV=production
-JWT_SECRET=cambiar_por_secreto_largo
-JWT_EXPIRES=15m
-JWT_REFRESH_EXPIRES=7d
-CORS_ORIGIN=http://localhost:5173
-DEFAULT_IDEMPRESA=1
-
-# Base 'system' (autenticación + tipo_usuario + menu_general)
-SYSTEM_HOST=192.168.0.10
-SYSTEM_PORT=3050
-SYSTEM_DATABASE=C:/BD/system_empresa1.fdb
-SYSTEM_USER=SYSDBA
-SYSTEM_PASSWORD=masterkey
-SYSTEM_CHARSET=UTF8
-
-# Base 'server' (datos operativos: conceptos, sucursales, depósitos, configuración)
-SERVER_HOST=192.168.0.10
-SERVER_PORT=3050
-SERVER_DATABASE=C:/BD/server_empresa1.fdb
-SERVER_USER=SYSDBA
-SERVER_PASSWORD=masterkey
-SERVER_CHARSET=UTF8
-```
-
-> **Configuración del entorno** (tabla `CONFIGURACION_USUARIO` en BD `server`): se administra desde la UI; admite `localhost` como IP.
-
----
-
-## 5. Reglas de negocio críticas
-
-### 5.1 Strings posicionales
-
-| Campo | Long. | Codificación |
-|---|---|---|
-| `USUARIOEMPRESA.PERMISOS` | 50 | `S/N` por posición (Permisos Generales). |
-| `USUARIOEMPRESA.MOVIMIENTOS` | 20 | `S/N`; el índice = valor `tipo` en `TIPOMOVIMIENTO`. |
-| `USUARIOEMPRESA.PERMISO_GG` | 50 | `S/N` por módulo (contabilidad/RRHH). |
-| `USUARIOEMPRESA.MENU_GG_2` | 100 | `S/N` PDV. |
-| `USUARIO_CONCEPTO.PERMISO_VARIOS` | 15 | **`'0' = elegido`**, **`'1' = no elegido`** (invertido). |
-
-El **service** `permisos.service.js` expone `decodeSN/encodeSN`, `decode01/encode01`, `decodeConcepto/encodeConcepto`. **Nunca** manipular estos strings desde controladores ni desde el cliente.
-
-### 5.2 Tablas sin PK (DELETE + INSERT obligatorio)
-
-Por herencia del legacy, las siguientes tablas **no tienen primary key** y no pueden actualizarse fila por fila. El patrón es siempre **DELETE all by iduser + INSERT** los nuevos valores, dentro de una sola transacción:
-
-- `USUARIO_CONCEPTO` — actualmente con upsert tolerante (PK lógica `iduser + idtipomovimiento`); migrar a DELETE+INSERT si se reportan inconsistencias.
-- `USUARIO_SUCURSAL` — implementado DELETE+INSERT.
-- `USUARIO_DEPOSITO` (salida) — implementado DELETE+INSERT.
-- `USUARIO_DEPOSITO1` (entrada) — implementado DELETE+INSERT.
-
-### 5.3 Depósito de salida ⇔ sucursal habilitada
-
-Un usuario sólo puede tener un depósito como **salida** si su sucursal correspondiente está marcada como habilitada en `USUARIO_SUCURSAL`. Validación:
-
-- **Cliente**: checkbox bloqueado + banner de advertencia para filas en conflicto.
-- **Servidor**: el modelo `usuarioDeposito.replaceAll()` valida en la misma transacción y descarta silenciosamente las filas inválidas, devolviendo `salidaDescartados[]`.
-
-La **entrada** no tiene esta restricción (el receptor puede pertenecer a otra sucursal).
-
-### 5.4 Pestaña Movimientos visible sólo si el menú lo permite
-
-`AccesosEditor` oculta la pestaña Movimientos si `mnuAdminMovimientos` está deshabilitado en Menú Gestión. Al togglear flags de movimientos en `FlagsTab`, se **sincroniza** automáticamente con los items `mnuAdmMovimientos{0..16}` del menú.
-
-### 5.5 Personalización por usuario sobre rol
-
-Cuando `scope === 'usuario'`, la pestaña Movimientos añade dentro de cada concepto expandido un panel ámbar con 5 controles:
-
-| Campo | UI | Catálogo |
-|---|---|---|
-| `idtalonario` | Select | `talonario WHERE estado='A'` JOIN `sucursal`. |
-| `idvendedor` | Select | `vendedor WHERE estado=1`. |
-| `idpersona` | Input numérico | (1M+ registros, no select). |
-| `idplanventa` | Select | `planventa WHERE estado=1`. |
-| `idcondicion` | Select | `condicion WHERE estado=1`. |
-
-En `scope === 'rol'` los 5 campos no se muestran ni se envían — así, guardar permisos a nivel rol **no pisa** la personalización por usuario (el modelo sólo actualiza columnas presentes en el payload).
-
-### 5.6 Inicialización perezosa
-
-- Si un usuario no tiene fila en `usuarioempresa`, se crea con valores en blanco al primer `GET /accesos/:iduser`.
-- Si no tiene filas en `menu_general`, se **copia desde Admin** con `permiso=0` (todo bloqueado por defecto).
-
-### 5.7 Auditoría
-
-Toda alta/baja/cambio operativo (reset clave, reasignación, cambio de perfil) pasa por **`PCD_OPERACIONES`** que registra en `HISTORIAL_USUARIO` (BD `server`). La consulta/visualización del historial está **pendiente**.
-
-### 5.8 Encoding / Firebird 2.5
-
-- Charset `UTF8` en pool y request.
-- **No usar comillas dobles** alrededor de identificadores en minúscula: Firebird hace case‑sensitive y rompe la búsqueda. La palabra `SYSTEM` **no es reservada** en 2.5.
-- **No usar `AUTONOMOUS TRANSACTION`** desde Node: una transacción por request.
-
----
-
-## 6. Buenas prácticas aplicadas
-
-- **MVC** estricto: `routes → controller → service → model`.
-- **Validación temprana** con Zod en cada endpoint (params + body).
-- **JWT** firmados con `HS256`, claims mínimos, expiración corta + refresh.
-- **bcrypt** para claves (rehash transparente en login si vienen del legacy).
-- **Helmet, CORS, rate‑limit, compression** activos en producción.
-- **Manejo central de errores** con códigos HTTP semánticos (`error.middleware`).
-- **Logs estructurados** (pino) con `request-id`.
-- **Separación de credenciales** por `.env`; jamás en código.
-- **Frontend desacoplado**: contrato vía JSON, sin acoplamiento a la BD.
-- **Accesibilidad** (a11y): labels, foco visible, navegación por teclado, contraste ≥ 4.5:1.
-- **i18n‑ready**: textos en `es` centralizados, fácil migración a `i18next`.
-- **Lazy loading** por pestaña en `AccesosEditor` (conceptos, sucursales y depósitos sólo se piden al activar la pestaña).
-- **Optimistic UI con `dirty set`**: cada pestaña marca su flag de cambios sin bloquear navegación entre tabs.
-- **Transacciones explícitas** desde Node, commit/rollback controlado.
-
----
-
-## 7. Endpoints
-
-### 7.1 Autenticación
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/auth/login` | iduser + pass → access + refresh. |
-| `POST` | `/api/auth/refresh` | Renueva access token. |
-
-### 7.2 Usuarios
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET`   | `/api/usuarios?busqueda=&idperfil=&estado=` | Lista filtrada. |
-| `GET`   | `/api/usuarios/:iduser` | Ficha. |
-| `POST`  | `/api/usuarios` | Alta (invoca `PCD_USUARIO`). |
-| `PATCH` | `/api/usuarios/:iduser` | Modificación (nombre, apellido, documento). |
-| `POST`  | `/api/usuarios/:iduser/baja` | Baja (`PCD_OPERACIONES` idop=2). |
-| `POST`  | `/api/usuarios/:iduser/reset-clave` | Reset clave (idop=3). |
-| `POST`  | `/api/usuarios/:iduser/reasignar-sucursal` | (idop=5). |
-| `POST`  | `/api/usuarios/:iduser/cambiar-perfil` | (idop=6 — reemplaza todo). |
-| `POST`  | `/api/usuarios/bloquear-sin-menu` | Bloqueo masivo de usuarios sin `menu_general`. |
-| `GET`   | `/api/usuarios/sugerir?nombre=&apellido=` | Sugiere iduser. |
-| `GET`   | `/api/usuarios/check-documento?documento=` | Disponibilidad de CI/RUC. |
-| `GET`   | `/api/usuarios/:iduser/complemento` | `modo_print/talonario/descuento`. |
-| `PATCH` | `/api/usuarios/:iduser/complemento` | Actualiza complemento. |
-
-### 7.3 Accesos (por usuario)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/api/accesos/:iduser` | Estado completo (menu + flags + pdv + gg). |
-| `PUT` | `/api/accesos/:iduser/menu` | Flags `MENU_GENERAL`. |
-| `PUT` | `/api/accesos/:iduser/permisos-generales` | String `PERMISOS`. |
-| `PUT` | `/api/accesos/:iduser/movimientos` | String `MOVIMIENTOS`. |
-| `PUT` | `/api/accesos/:iduser/pdv` | `MENU_GG_2`. |
-| `PUT` | `/api/accesos/:iduser/permiso-gg` | `PERMISO_GG`. |
-| `GET` | `/api/accesos/:iduser/conceptos` | Grupos de tipo de movimiento con `permiso_varios` y 5 campos extra. |
-| `PUT` | `/api/accesos/:iduser/conceptos` | Upsert tolerante (preserva los 5 campos si no vienen). |
-| `GET` | `/api/accesos/:iduser/sucursales` | Catálogo × asignación. |
-| `PUT` | `/api/accesos/:iduser/sucursales` | DELETE+INSERT. |
-| `GET` | `/api/accesos/:iduser/depositos` | Catálogo × salida × entrada. |
-| `PUT` | `/api/accesos/:iduser/depositos` | DELETE+INSERT en ambas tablas, valida regla salida↔sucursal. |
-
-### 7.4 Roles (mismas operaciones contra el iduser de la plantilla)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET`    | `/api/roles?estado=` | Lista. |
-| `POST`   | `/api/roles` | Alta. |
-| `PUT`    | `/api/roles/:idperfil` | Edición. |
-| `DELETE` | `/api/roles/:idperfil` | Baja. |
-| `GET`    | `/api/roles/:idperfil/accesos` | Estado completo de la plantilla. |
-| `PUT`    | `/api/roles/:idperfil/{menu\|permisos-generales\|movimientos\|pdv\|permiso-gg\|conceptos\|sucursales\|depositos}` | Mismos payloads que `/accesos/:iduser/...`. |
-
-### 7.5 Catálogos
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/api/catalogos/perfiles` | `TIPO_USUARIO` + `Admin` sintético. |
-| `GET` | `/api/catalogos/sucursales` | `SUCURSAL WHERE estado=1`. |
-| `GET` | `/api/catalogos/depositos` | `DEPOSITO WHERE estado=1` (incluye `idsucursal`). |
-| `GET` | `/api/catalogos/talonarios` | `TALONARIO WHERE estado='A'` JOIN `SUCURSAL`. |
-| `GET` | `/api/catalogos/vendedores` | `VENDEDOR WHERE estado=1`. |
-| `GET` | `/api/catalogos/planventas` | `PLANVENTA WHERE estado=1`. |
-| `GET` | `/api/catalogos/condiciones` | `CONDICION WHERE estado=1`. |
-| `GET` | `/api/catalogos/permisos-generales` | `TMP$USUARIO_PERMISOS_GENERALES`. |
-| `GET` | `/api/catalogos/permisos-pdv` | `TMP$USUARIO_PERMISOS_PDV`. |
-| `GET` | `/api/catalogos/menu-base/:idperfil` | Plantilla de menú del perfil. |
-
-### 7.6 Configuración del entorno
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET`    | `/api/configuracion` | Lista todas las IPs. |
-| `GET`    | `/api/configuracion/:ip` | Detalle. |
-| `POST`   | `/api/configuracion` | Alta. |
-| `PUT`    | `/api/configuracion/:ip` | Edición. |
-| `DELETE` | `/api/configuracion/:ip` | Baja. |
-| `GET`    | `/api/configuracion/autorizado` | Verifica si la IP cliente está autorizada (flag `AUTORIZADO`). |
-
----
-
-## 8. Puesta en marcha
-
-### Requisitos
-
-- Node.js **≥ 20**, npm ≥ 10.
-- Firebird **2.5 / 3.0 / 4.0** accesible por TCP/3050.
-- BDs `system_*.fdb` y `server_*.fdb` del cliente.
-
-### Instalación
-
-```powershell
-# 1) Dependencias
-npm install              # raíz (monorepo)
-npm install --prefix server
-npm install --prefix client
-
-# 2) .env
-Copy-Item server\.env.example server\.env
-Copy-Item client\.env.example client\.env
-# editar credenciales
-
-# 3) Dev (ambos en paralelo)
-npm run dev
-```
-
-| Script raíz | Acción |
-|---|---|
-| `npm run dev` | Inicia `server` (puerto 3001) + `client` (puerto 5173) en paralelo. |
-| `npm run build` | Build de producción del cliente; copia a `server/public/` si corresponde. |
-| `npm run lint` | ESLint en ambos workspaces. |
-
-### Troubleshooting frecuente
-
-| Síntoma | Causa común | Solución |
-|---|---|---|
-| `error interno del servidor` en Configuración | Tabla referenciada en otra BD; comillas `"system"` case-sensitive | Verificar `BD` correcta (`server`/`system`); quitar comillas en identificadores. |
-| Puerto 5175 ocupado | Otra instancia de Vite corriendo | `Get-NetTCPConnection -LocalPort 5175` → `Stop-Process` por PID. |
-| Toast "Error guardando" en Accesos | Validación Zod rechazó payload | Revisar logs `pino`: muestra el path del campo inválido. |
-| Pestaña Movimientos no aparece | `mnuAdminMovimientos` deshabilitado en Menú | Habilitarlo y guardar; la pestaña se mostrará. |
-
----
-
-## 9. Backlog / Próximos pasos
-
-Orden sugerido para retomar mañana:
-
-1. **Auditoría / Historial** — pestaña que consulta `HISTORIAL_USUARIO` filtrando por `iduser`, con paginación y filtro por `idoperacion`.
-2. **Prueba‑error** — formulario de simulación: dado un usuario y un movimiento, verificar si tiene los permisos necesarios paso a paso (visualización de cada flag evaluado).
-3. **Legajos** — vinculación con `LEGAJO` (talento humano): datos personales extendidos, foto, contacto de emergencia, contrato.
-4. **Biometría** — enrollment de huellas, sincronización con dispositivos (Suprema / ZKTeco), tabla `BIOMETRICO`.
-5. **Importación masiva** — CSV/Excel con validación previa, dry‑run y rollback.
-6. **Tests E2E** — Playwright cubriendo: login → alta usuario → asignar rol → editar accesos → guardar → verificar persistencia.
-7. **Migrar `USUARIO_CONCEPTO` a DELETE+INSERT** (consistencia con sucursales/depósitos), preservando los 5 campos extra leyendo previamente del DB.
-
-### Decisiones tomadas (no revisitar)
-
-- Cambio de rol = **Reemplazar todo** (idop=6 ya lo hace en el SP).
-- `PERSONA` es input numérico, no select (1M+ registros).
-- Botón Accesos en el datagrid + fila naranja al seleccionar.
-- Talonario display: `[Sucursal] #IdTalonario (Desde–Hasta) vence DD/MM/AAAA`.
-- 5 campos extra de `USUARIO_CONCEPTO` sólo se envían en `scope='usuario'`; en `scope='rol'` se preservan los del usuario.
-- Configuración acepta `localhost` además de IPv4.
-- Tabla `CONFIGURACION_USUARIO` vive en BD `server` (no `system`), sin columna `version`, sí `version_nro`.
-
----
-
-## 10. Convenciones de código
-
-- **Imports absolutos** desde `src/` en el cliente.
-- **Sin docstrings en código que no se tocó**.
-- **No crear archivos markdown** salvo que se pidan explícitamente.
-- Componentes React: nombre `PascalCase`, archivo igual al componente.
-- Endpoints: kebab-case en URL, camelCase en JSON.
-- Toasts en español, mensajes cortos.
-- Tipografía compacta en grillas (`text-xs`, `py-0.5`) — imita la densidad del legacy.
-
----
-
-> Para dudas sobre BD legada o lógica de negocio histórica, consultar `BaseDatos.txt` y el SP `PCD_OPERACIONES` (BD `server`).

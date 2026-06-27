@@ -1,6 +1,10 @@
 'use strict';
 
 const { query, transaction } = require('../config/firebird');
+const { decodeRows } = require('../utils/charset');
+
+const OCT = 'VARCHAR(10) CHARACTER SET OCTETS';
+const up = (v) => String(v || '').trim().toUpperCase();
 
 /**
  * USUARIO_SUCURSAL (iduser, idsucursal, orden) — sin PK en el legacy.
@@ -11,9 +15,9 @@ const UsuarioSucursalModel = {
     query(
       'server',
       `SELECT idsucursal, orden FROM usuario_sucursal
-        WHERE UPPER(iduser) = UPPER(?)
+        WHERE CAST(UPPER(TRIM(iduser)) AS ${OCT}) = CAST(? AS ${OCT})
         ORDER BY orden, idsucursal`,
-      [iduser],
+      [up(iduser)],
     ).catch(() => []),
 
   /**
@@ -24,11 +28,13 @@ const UsuarioSucursalModel = {
   sucursalesBulk: () =>
     query(
       'server',
-      `SELECT UPPER(TRIM(us.iduser)) AS iduser, s.nombre AS sucursal_nombre, us.orden
+      `SELECT UPPER(TRIM(us.iduser)) AS iduser,
+              CAST(s.nombre AS VARCHAR(120) CHARACTER SET OCTETS) AS sucursal_nombre,
+              us.orden
          FROM usuario_sucursal us
          JOIN sucursal s ON s.idsucursal = us.idsucursal
         ORDER BY UPPER(TRIM(us.iduser)), us.orden, us.idsucursal`,
-    ).catch(() => []),
+    ).then((r) => decodeRows(r, ['sucursal_nombre'])).catch(() => []),
 
   /**
    * Reemplaza por completo la asignación de sucursales del usuario.
@@ -38,8 +44,8 @@ const UsuarioSucursalModel = {
   replaceAll: (iduser, items) =>
     transaction('server', async (tx) => {
       await tx.query(
-        `DELETE FROM usuario_sucursal WHERE UPPER(iduser) = UPPER(?)`,
-        [iduser],
+        `DELETE FROM usuario_sucursal WHERE CAST(UPPER(TRIM(iduser)) AS ${OCT}) = CAST(? AS ${OCT})`,
+        [up(iduser)],
       );
       for (const { idsucursal, orden } of items) {
         await tx.query(

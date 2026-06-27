@@ -26,13 +26,19 @@ const MasterModel = {
 
   async obtenerUsuario(iduser) {
     if (!this.habilitado()) return null;
+    const { decodeRows } = require('../utils/charset');
     const rows = await query(
       'master',
-      `SELECT FIRST 1 idusuario, nombre, apellido, clave, estado, menuver, idempresa
-         FROM usuario WHERE UPPER(TRIM(idusuario)) = UPPER(TRIM(?))`,
-      [iduser],
+      `SELECT FIRST 1 idusuario,
+              CAST(nombre   AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+              CAST(apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
+              CAST(clave    AS VARCHAR(60)  CHARACTER SET OCTETS) AS clave,
+              estado, menuver, idempresa
+         FROM usuario
+        WHERE CAST(UPPER(TRIM(idusuario)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)`,
+      [String(iduser || '').trim().toUpperCase()],
     );
-    return rows[0] || null;
+    return rows[0] ? decodeRows([rows[0]], ['nombre', 'apellido', 'clave'])[0] : null;
   },
 
   async obtenerUsuarioEmpresa(iduser, idempresa) {

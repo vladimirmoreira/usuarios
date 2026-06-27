@@ -38,3 +38,6 @@ npm run install:all
 
 # Compilar el frontend (genera client/dist/)
 npm --prefix client run build
+
+
+obs: si hay error npm --prefix client run build 2>&1 | head -60

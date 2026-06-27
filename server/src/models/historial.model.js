@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/firebird');
+const { decodeRows } = require('../utils/charset');
 
 /**
  * Auditoría: registra eventos en HISTORIAL_USUARIO (BD server).
@@ -9,7 +10,7 @@ const { query } = require('../config/firebird');
  *   ID            INTEGER NOT NULL  (sin generator garantizado → MAX+1)
  *   USUARIO       VARCHAR(10)       (iduser destinatario de la acción)
  *   IDOPERACION   INTEGER NOT NULL  (FK a TIPO_OPERACION)
- *   FECHA         DATE NOT NULL     (CURRENT_DATE)
+ *   FECHA         TIMESTAMP NOT NULL  (CURRENT_TIMESTAMP)  -- dialect 1: no soporta DATE
  *   AUTORIZACION  VARCHAR(10) NOT NULL (iduser que autoriza/ejecuta)
  *   OBSERVACION   BLOB sub_type 1   (descripción libre, opcional)
  */
@@ -27,7 +28,7 @@ const HistorialModel = {
     await query(
       'server',
       `INSERT INTO historial_usuario (id, usuario, idoperacion, fecha, autorizacion, observacion)
-       VALUES (GEN_ID(GEN_HISTORIAL_USUARIO, 1), ?, ?, CURRENT_DATE, ?, ?)`,
+       VALUES (GEN_ID(GEN_HISTORIAL_USUARIO, 1), ?, ?, CURRENT_TIMESTAMP, ?, ?)`,  /* dialect 1 */
       [u, op, rp, obs],
     );
     return 1;
@@ -51,17 +52,21 @@ const HistorialModel = {
     if (usuario)     add('h.usuario CONTAINING ?',     String(usuario).trim());
     if (idoperacion != null && idoperacion !== '') add('h.idoperacion = ?', Number(idoperacion));
     if (autorizacion) add('h.autorizacion CONTAINING ?', String(autorizacion).trim());
-    if (desde)        add('h.fecha >= CAST(? AS DATE)', desde);
-    if (hasta)        add('h.fecha <= CAST(? AS DATE)', hasta);
+    if (desde)        add('h.fecha >= CAST(? AS TIMESTAMP)', desde);  /* dialect 1 */
+    if (hasta)        add('h.fecha <= CAST(? AS TIMESTAMP)', hasta);   /* dialect 1 */
 
     const whereStr = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const [rows, totalRows] = await Promise.all([
       query(
         'server',
-        `SELECT h.id, h.usuario, h.idoperacion,
-                COALESCE(t.descripcion, CAST(h.idoperacion AS VARCHAR(10))) AS descripcion,
-                h.fecha, h.autorizacion, h.observacion
+        `SELECT h.id,
+                CAST(h.usuario AS VARCHAR(10) CHARACTER SET OCTETS) AS usuario,
+                h.idoperacion,
+                CAST(COALESCE(t.descripcion, CAST(h.idoperacion AS VARCHAR(10))) AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion,
+                h.fecha,
+                CAST(h.autorizacion AS VARCHAR(10) CHARACTER SET OCTETS) AS autorizacion,
+                h.observacion
            FROM historial_usuario h
            LEFT JOIN tipo_operacion t ON t.idtipo_operacion = h.idoperacion
            ${whereStr}
@@ -77,7 +82,10 @@ const HistorialModel = {
     ]);
 
     const total = Number(totalRows[0]?.total || 0);
-    return { rows, page: p, pageSize: size, total, totalPages: Math.ceil(total / size) || 1 };
+    return {
+      rows: decodeRows(rows, ['usuario', 'descripcion', 'autorizacion', 'observacion']),
+      page: p, pageSize: size, total, totalPages: Math.ceil(total / size) || 1,
+    };
   },
 };
 

@@ -5,15 +5,16 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Paleta corporativa: azul moderno (escala Tailwind blue) con buen contraste.
         brand: {
-          50:  '#fff4e0',  // ámbar cálido — sin tono salmon/pastel
-          100: '#ffd9a0',  // naranja claro saturado
-          200: '#ffb347',  // ámbar medio
-          500: '#f97316',  // naranja puro
-          600: '#ea580c',  // naranja profundo
-          700: '#c2410c',  // naranja oscuro
-          800: '#9a3412',  // naranja quemado
-          900: '#431407',  // oscuro para sombras dark mode
+          50:  '#eff6ff',  // fondo muy claro
+          100: '#dbeafe',  // fondo claro / chips
+          200: '#bfdbfe',  // bordes suaves / hover claro
+          500: '#3b82f6',  // azul medio (acentos)
+          600: '#2563eb',  // azul primario (botones, activo)
+          700: '#1d4ed8',  // azul profundo (hover de botones)
+          800: '#1e40af',  // azul oscuro
+          900: '#172554',  // muy oscuro (dark mode / sombras)
         },
       },
       fontFamily: {

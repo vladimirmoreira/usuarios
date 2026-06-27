@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Loader2, X, Users, Sliders, AlertTriangle, CheckSquare, Square, XCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '../../lib/notify';
 import { RolesAPI, type RolUsuario } from '../../api/endpoints';
 
 type Props = {

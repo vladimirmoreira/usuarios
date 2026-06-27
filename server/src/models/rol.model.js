@@ -1,6 +1,7 @@
 'use strict';
 
 const { query, transaction } = require('../config/firebird');
+const { decodeRows } = require('../utils/charset');
 
 const RolModel = {
   /** Devuelve el iduser plantilla del rol (tipo_usuario.iduser).
@@ -9,19 +10,25 @@ const RolModel = {
     if (idperfil === 0) {
       const rows = await query(
         'system',
-        `SELECT FIRST 1 iduser, 0 AS idtipo_usuario, nombre AS descripcion, 0 AS tipo, COALESCE(estado,0) AS estado, 0 AS master
+        `SELECT FIRST 1 CAST(iduser AS VARCHAR(10) CHARACTER SET OCTETS) AS iduser,
+                0 AS idtipo_usuario,
+                CAST(nombre AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion,
+                0 AS tipo, COALESCE(estado,0) AS estado, 0 AS master
            FROM usuario WHERE UPPER(TRIM(iduser)) = 'ADMIN'`,
       );
-      return rows[0] || null;
+      return rows[0] ? decodeRows([rows[0]], ['iduser', 'descripcion'])[0] : null;
     }
     const rows = await query(
       'system',
-      `SELECT FIRST 1 iduser, idtipo_usuario, descripcion, tipo, estado,
+      `SELECT FIRST 1 CAST(iduser AS VARCHAR(10) CHARACTER SET OCTETS) AS iduser,
+              idtipo_usuario,
+              CAST(descripcion AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion,
+              tipo, estado,
               COALESCE(master,0) AS master, COALESCE(edicion_rol,0) AS edicion_rol
          FROM tipo_usuario WHERE idtipo_usuario = ?`,
       [idperfil],
     );
-    return rows[0] || null;
+    return rows[0] ? decodeRows([rows[0]], ['iduser', 'descripcion'])[0] : null;
   },
 
   /** Próximo id disponible (MAX + 1, nunca negativo). */
@@ -81,7 +88,10 @@ const RolModel = {
   async listarUsuariosPorRol(idperfil) {
     return query(
       'system',
-      `SELECT u.iduser, u.nombre, u.apellido, u.estado,
+      `SELECT CAST(u.iduser   AS VARCHAR(10)  CHARACTER SET OCTETS) AS iduser,
+              CAST(u.nombre   AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+              CAST(u.apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
+              u.estado,
               COALESCE(u.exclusion_permisos, 0) AS exclusion_permisos
          FROM usuario u
         WHERE u.idtipo_usuario = ?
@@ -89,7 +99,7 @@ const RolModel = {
           AND UPPER(TRIM(u.iduser)) <> 'ADMIN'
         ORDER BY u.apellido, u.nombre`,
       [idperfil],
-    );
+    ).then((r) => decodeRows(r, ['iduser', 'nombre', 'apellido']));
   },
 };
 
