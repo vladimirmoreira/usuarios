@@ -170,6 +170,25 @@ const UsuarioController = {
     } catch (e) { next(e); }
   },
 
+  /** Paso 1: genera código de verificación (simulado → se devuelve para mostrarlo). */
+  async resetClaveIniciar(req, res, next) {
+    try {
+      const r = await OperacionesService.resetClaveIniciar({ iduser: req.params.iduser, ip: ipDe(req) });
+      res.json(r);
+    } catch (e) { next(e); }
+  },
+
+  /** Paso 2: verifica el código y aplica el reset (clave manual opcional). */
+  async resetClaveConfirmar(req, res, next) {
+    try {
+      const r = await OperacionesService.resetClaveConfirmar({
+        iduser: req.params.iduser, codigo: req.body.codigo, nuevaClave: req.body.nuevaClave,
+        rptUser: rptDe(req), ip: ipDe(req),
+      });
+      res.json(r);
+    } catch (e) { next(e); }
+  },
+
   async reasignarSucursal(req, res, next) {
     try {
       const r = await OperacionesService.reasignarSucursal({

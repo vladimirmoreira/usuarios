@@ -27,6 +27,11 @@ const logger = require('../utils/logger');
 
 const CLAVE_DEFECTO = '12345678901234567890';
 
+// Códigos de verificación para reset de clave (en memoria, expiran en 10 min).
+// Simulado: sin gateway de email/SMS real, el código se devuelve para mostrarlo al operador.
+const _resetCodes = new Map(); // iduserUpper -> { code, expires }
+const RESET_TTL_MS = 10 * 60 * 1000;
+
 /**
  * Construye el texto del BLOB de observación para HISTORIAL_USUARIO.
  * Cada línea representa una tabla/acción ejecutada, prefijada con "> ".
@@ -267,22 +272,29 @@ const OperacionesService = {
   // ===========================================================================
   // OP 3 \u2014 RESET DE CLAVE
   // ===========================================================================
+  // Reset directo (sin código) — usado por la acción masiva (bulk).
   async resetClave(ctx) {
+    return this._aplicarReset(ctx, null);
+  },
+
+  // Aplica el reset. `claveForzada` (opcional) sobreescribe la lógica default/legajo.
+  async _aplicarReset(ctx, claveForzada) {
     const { iduser, rptUser, ip } = ctx;
     const u = await OperacionesModel.estadoUsuario(iduser);
     if (!u) { const e = new Error('Usuario no encontrado'); e.status = 404; throw e; }
     const flags = await cargarContexto(ip);
 
-    // Si LEGAJO=1, usar el documento de la persona; si no, clave por defecto.
-    let nuevaClave = CLAVE_DEFECTO;
-    if (flags.legajo) {
+    // Si se pasó clave manual usarla; si no: LEGAJO=1 → documento; si no → clave por defecto.
+    let nuevaClave = claveForzada || CLAVE_DEFECTO;
+    let origen = claveForzada ? 'clave manual' : 'clave por defecto';
+    if (!claveForzada && flags.legajo) {
       const doc = await OperacionesModel.documentoPersonaPorUsuario(iduser);
-      if (doc) nuevaClave = String(doc);
+      if (doc) { nuevaClave = String(doc); origen = 'clave=documento de legajo'; }
     }
 
     const d = [];
     await OperacionesModel.actualizarPass(iduser, nuevaClave);
-    d.push(`[system] UPDATE USUARIO.pass (${flags.legajo ? 'clave=documento de legajo' : 'clave por defecto'})`);
+    d.push(`[system] UPDATE USUARIO.pass (${origen})`);
 
     if (flags.gastronomia) {
       await OperacionesModel.actualizarMeseroClave(iduser, nuevaClave);
@@ -292,6 +304,30 @@ const OperacionesService = {
     replicarMaster(iduser, { ip, claveNueva: nuevaClave });
     await audit({ iduser, idoperacion: OP.RESET_CLAVE, rptUser, observacion: buildDetalle(d) });
     return { ok: true, mensaje: 'EXITOSO' };
+  },
+
+  // Paso 1: genera y "envía" un código de verificación (simulado → se devuelve al operador).
+  async resetClaveIniciar(ctx) {
+    const { iduser, ip } = ctx;
+    const u = await OperacionesModel.estadoUsuario(iduser);
+    if (!u) { const e = new Error('Usuario no encontrado'); e.status = 404; throw e; }
+    const flags = await cargarContexto(ip).catch(() => ({}));
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    _resetCodes.set(String(iduser).trim().toUpperCase(), { code, expires: Date.now() + RESET_TTL_MS });
+    // Sin SMTP/gateway real → simulado: el operador comunica el código al usuario.
+    return { ok: true, simulado: true, mail_habilitado: Number(flags?.mail_resetclave) === 1, codigo: code, expira_min: 10 };
+  },
+
+  // Paso 2: verifica el código y aplica el reset (clave manual opcional).
+  async resetClaveConfirmar(ctx) {
+    const { iduser, codigo, nuevaClave, rptUser, ip } = ctx;
+    const idu = String(iduser).trim().toUpperCase();
+    const rec = _resetCodes.get(idu);
+    if (!rec || rec.expires < Date.now()) { const e = new Error('Código inexistente o vencido. Solicitá uno nuevo.'); e.status = 400; throw e; }
+    if (String(codigo).trim() !== rec.code) { const e = new Error('Código incorrecto.'); e.status = 400; throw e; }
+    _resetCodes.delete(idu);
+    const clave = nuevaClave && String(nuevaClave).trim() ? String(nuevaClave).trim() : null;
+    return this._aplicarReset({ iduser, rptUser, ip }, clave);
   },
 
   // ===========================================================================

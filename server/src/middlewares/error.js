@@ -6,8 +6,11 @@ const logger = require('../utils/logger');
 module.exports = function errorHandler(err, req, res, _next) {
   logger.error({ err, url: req.originalUrl }, 'Unhandled error');
   const status = err.status || 500;
+  // Los errores de cliente (4xx) llevan mensajes pensados para el usuario → se exponen.
+  // Los 5xx quedan genéricos para no filtrar detalles internos.
+  const exponer = err.expose || (status >= 400 && status < 500);
   res.status(status).json({
-    error: err.expose ? err.message : 'Error interno del servidor',
+    error: exponer ? err.message : 'Error interno del servidor',
     code: err.code,
   });
 };

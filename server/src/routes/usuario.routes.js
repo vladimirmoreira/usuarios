@@ -130,6 +130,12 @@ router.post('/:iduser/baja', validate(idParam), ctrl.dardeBaja);
 router.post('/:iduser/reactivar', validate(idParam), ctrl.reactivar);
 router.post('/:iduser/vincular-legajo', validate(idParam), ctrl.vincularLegajo);
 router.post('/:iduser/reset-clave', validate(idParam), ctrl.resetClave);
+router.post('/:iduser/reset-clave/iniciar', validate(idParam), ctrl.resetClaveIniciar);
+router.post(
+  '/:iduser/reset-clave/confirmar',
+  validate({ ...idParam, body: z.object({ codigo: z.string().min(4).max(8), nuevaClave: z.string().max(20).optional() }) }),
+  ctrl.resetClaveConfirmar,
+);
 router.post(
   '/:iduser/reasignar-sucursal',
   validate({ ...idParam, body: z.object({ idsucursal: z.number().int().positive() }) }),

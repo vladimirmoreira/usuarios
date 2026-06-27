@@ -40,6 +40,10 @@ export const UsuariosAPI = {
   reactivar: (iduser: string) => api.post(`/usuarios/${iduser}/reactivar`).then((r) => r.data),
   vincularLegajo: (iduser: string) => api.post(`/usuarios/${iduser}/vincular-legajo`).then((r) => r.data),
   resetClave: (iduser: string) => api.post(`/usuarios/${iduser}/reset-clave`).then((r) => r.data),
+  resetClaveIniciar: (iduser: string) =>
+    api.post(`/usuarios/${iduser}/reset-clave/iniciar`).then((r) => r.data) as Promise<{ ok: boolean; simulado: boolean; mail_habilitado: boolean; codigo: string; expira_min: number }>,
+  resetClaveConfirmar: (iduser: string, codigo: string, nuevaClave?: string) =>
+    api.post(`/usuarios/${iduser}/reset-clave/confirmar`, { codigo, nuevaClave: nuevaClave || undefined }).then((r) => r.data),
   reasignarSucursal: (iduser: string, idsucursal: number) =>
     api.post(`/usuarios/${iduser}/reasignar-sucursal`, { idsucursal }).then((r) => r.data),
   cambiarPerfil: (iduser: string, idperfil: number) =>

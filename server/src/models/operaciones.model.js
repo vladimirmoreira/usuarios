@@ -19,7 +19,7 @@ const OperacionesModel = {
   async contextoPorIp(ip) {
     const rows = await query(
       'server',
-      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario
+      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave
          FROM configuracion_usuario
         WHERE TRIM(ip) = TRIM(CAST(? AS VARCHAR(20)))`,
       [ip || ''],
@@ -28,11 +28,11 @@ const OperacionesModel = {
     // Fallback: primera fila (modo legacy)
     const fall = await query(
       'server',
-      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario
+      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave
          FROM configuracion_usuario`,
       [],
     );
-    return fall[0] || { legajo: 0, biometrico: 0, gastronomia: 0, contabilidad: 0, talento_humano: 0, complementario: 0 };
+    return fall[0] || { legajo: 0, biometrico: 0, gastronomia: 0, contabilidad: 0, talento_humano: 0, complementario: 0, mail_resetclave: 0 };
   },
 
   // ---------------------------------------------------------------------------

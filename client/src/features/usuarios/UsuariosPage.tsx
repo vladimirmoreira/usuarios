@@ -11,6 +11,7 @@ import HistorialUsuarioModal from './HistorialUsuarioModal';
 import ImportarUsuariosModal from './ImportarUsuariosModal';
 import ReasignarSucursalModal from './ReasignarSucursalModal';
 import ReasignarSucursalBulkModal from './ReasignarSucursalBulkModal';
+import ResetClaveModal from './ResetClaveModal';
 
 export default function UsuariosPage() {
   const [showAgregar, setShowAgregar]       = useState(false);
@@ -84,17 +85,8 @@ export default function UsuariosPage() {
 
   const { confirm: confirmDialog, ConfirmDialog } = useConfirm();
 
-  const onReset = async (iduser: string) => {
-    if (!await confirmDialog({ title: 'Reiniciar clave', message: `¿Reiniciar clave de ${iduser}?`, confirmLabel: 'Reiniciar', variant: 'warning' })) return;
-    try {
-      const r = await UsuariosAPI.resetClave(iduser);
-      r.ok
-        ? toast.success(r.detalle ? `Clave reiniciada · ${r.detalle}` : 'Clave reiniciada')
-        : toast.error(r.mensaje || 'No se pudo reiniciar');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || 'Error al reiniciar la clave');
-    }
-  };
+  const [resetFor, setResetFor] = useState<string | null>(null);
+  const onReset = (iduser: string) => setResetFor(iduser);
   const onBaja = async (iduser: string) => {
     if (!await confirmDialog({ title: 'Dar de baja', message: `¿Dar de baja a ${iduser}?`, confirmLabel: 'Dar de baja', variant: 'danger' })) return;
     try {
@@ -221,6 +213,7 @@ export default function UsuariosPage() {
         onToggleAllSelected={toggleAllSelected}
       />
       {showAgregar && <AgregarUsuarioModal onClose={() => { setShowAgregar(false); usuariosQ.refetch(); }} />}
+      {resetFor && <ResetClaveModal iduser={resetFor} onClose={() => setResetFor(null)} />}
       {usuarioAEditar && (
         <EditarUsuarioModal
           usuario={usuarioAEditar}
