@@ -120,6 +120,9 @@ export default function RolesPage() {
           </thead>
           <tbody>
             {(rolesQ.data || [])
+              // idtipo_usuario = -1 ("Sin Asignación") es un estado del sistema para usuarios
+              // legados pendientes, no un rol gestionable: no se lista en Roles.
+              .filter((r) => r.idtipo_usuario !== -1)
               .filter((r) => !filtroTexto || r.descripcion.toLowerCase().includes(filtroTexto.toLowerCase()))
               .map((r) => {
               const esAdmin = r.idtipo_usuario === 0;

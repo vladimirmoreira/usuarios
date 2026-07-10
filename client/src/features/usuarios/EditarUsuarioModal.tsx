@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Pencil, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import toast from '../../lib/notify';
 import { z } from 'zod';
-import { RolesAPI, Rol, UsuariosAPI, Usuario, Complemento } from '../../api/endpoints';
+import { RolesAPI, Rol, UsuariosAPI, Usuario, Complemento, ConfiguracionAPI } from '../../api/endpoints';
 
 /* ── Esquema ───────────────────────────────────────────────────────── */
 const schema = z.object({
@@ -11,7 +11,8 @@ const schema = z.object({
   apellido:  z.string().min(1, 'Requerido').max(25, 'Máx. 25 caracteres'),
   documento: z.string().min(1, 'Requerido').max(20, 'Máx. 20 caracteres')
                .regex(/^[0-9]+$/, 'Solo dígitos numéricos'),
-  idperfil:  z.number({ invalid_type_error: 'Seleccione un perfil' }).int().positive('Seleccione un perfil'),
+  // Permite 0 ("Sin Rol") y -1 ("Sin Asignación", valor actual de usuarios legados).
+  idperfil:  z.number({ invalid_type_error: 'Seleccione un perfil' }).int(),
 });
 
 /* ── Tipos ─────────────────────────────────────────────────────────── */
@@ -57,6 +58,11 @@ export default function EditarUsuarioModal({
   });
 
   const perfilesQ = useQuery({ queryKey: ['perfiles-all'], queryFn: () => RolesAPI.listar() });
+  const flagsQ    = useQuery({ queryKey: ['cfg-flags'], queryFn: ConfiguracionAPI.flags });
+
+  // "pendiente": el usuario aún no tiene un rol real (Sin Rol=0, Sin Asignación=-1 o NULL).
+  // Solo en ese estado se puede asignar "Sin Rol"; con rol real no se permite el downgrade.
+  const pendiente = usuario.idtipo_usuario === 0 || usuario.idtipo_usuario === -1 || usuario.idtipo_usuario == null;
 
   const mutation = useMutation({
     mutationFn: async (data: { nombre: string; apellido: string; documento: string; idperfil: number; hasta_vigencia: string }) => {
@@ -259,12 +265,33 @@ export default function EditarUsuarioModal({
                   className={`input mt-1 ${errCls('idperfil')}`}
                 >
                   <option value="">Seleccionar…</option>
-                  {(perfilesQ.data || []).map((p: Rol) => {
-                    const inactivo = p.estado !== 1;
-                    const sinMenu  = (p.menu_count ?? 1) === 0;
-                    const disabled = inactivo || sinMenu;
-                    const label    = p.descripcion
-                      + (inactivo ? ' (Inactivo)' : sinMenu ? ' (Sin menú)' : '');
+                  {(perfilesQ.data || [])
+                    .filter((p: Rol) => {
+                      // "Sin Asignación" (-1): solo visible si es el perfil actual del usuario.
+                      if (p.idtipo_usuario === -1) return usuario.idtipo_usuario === -1;
+                      // "Sin Rol" (0): visible si la config lo habilita o el usuario aún no tiene rol real.
+                      if (p.idtipo_usuario === 0)  return flagsQ.data?.crear_sin_rol || pendiente;
+                      return true;
+                    })
+                    .map((p: Rol) => {
+                    const esSinRol    = p.idtipo_usuario === 0;
+                    const esSinAsig   = p.idtipo_usuario === -1;
+                    const inactivo    = p.estado !== 1;
+                    // Un rol solo es asignable si tiene al menos un permiso de menú activo.
+                    const sinPermisos = (p.permisos_activos ?? 1) === 0;
+                    const esActual = p.idtipo_usuario === usuario.idtipo_usuario;
+                    let disabled: boolean;
+                    let label: string;
+                    if (esSinAsig) {
+                      disabled = true;                 // no se asigna un usuario A "Sin Asignación"
+                      label = 'Sin Asignación';
+                    } else if (esSinRol) {
+                      disabled = !pendiente;           // "Sin Rol" solo para usuarios sin rol real (0/-1)
+                      label = 'Sin Rol';
+                    } else {
+                      disabled = !esActual && (inactivo || sinPermisos);
+                      label = p.descripcion + (inactivo ? ' (Inactivo)' : sinPermisos ? ' (Sin permisos)' : '');
+                    }
                     return (
                       <option key={p.idtipo_usuario} value={p.idtipo_usuario} disabled={disabled}>
                         {label}

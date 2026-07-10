@@ -19,7 +19,7 @@ const OperacionesModel = {
   async contextoPorIp(ip) {
     const rows = await query(
       'server',
-      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave
+      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave, COALESCE(crear_sin_rol,1) AS crear_sin_rol
          FROM configuracion_usuario
         WHERE TRIM(ip) = TRIM(CAST(? AS VARCHAR(20)))`,
       [ip || ''],
@@ -28,7 +28,7 @@ const OperacionesModel = {
     // Fallback: primera fila (modo legacy)
     const fall = await query(
       'server',
-      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave
+      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave, COALESCE(crear_sin_rol,1) AS crear_sin_rol
          FROM configuracion_usuario`,
       [],
     );
@@ -83,17 +83,61 @@ const OperacionesModel = {
   // ---------------------------------------------------------------------------
 
   /**
-   * Inserta USUARIO + USUARIOEMPRESA + MENU_GENERAL + USUARIO_SUCURSAL
-   * + USUARIO_DEPOSITO + USUARIO_DEPOSITO1 + USUARIO_CONCEPTO copiando del
-   * usuario-template del perfil. Clave inicial = documento.
+   * Inserta USUARIO + USUARIOEMPRESA + MENU_GENERAL (BD **system**) y
+   * USUARIO_SUCURSAL + USUARIO_DEPOSITO + USUARIO_DEPOSITO1 + USUARIO_CONCEPTO
+   * (BD **server**) copiando del usuario-template del perfil. Clave inicial = documento.
+   *
+   * Las tablas de sucursales/depósitos/conceptos viven en la BD `server`, no en
+   * `system`. Por eso el alta se hace en dos transacciones (una por base): la de
+   * `server` va anidada dentro de la de `system`, de modo que si la parte server
+   * falla, ambas revierten en cascada (rollback). El único hueco de atomicidad —
+   * despreciable— es que la commit de `system` falle después de que `server` ya
+   * commiteó; en la práctica un commit tras inserts correctos no falla.
    */
   async altaCompleta(params) {
-    return transaction('system', (tx) => _altaWork(tx, params));
+    return transaction('system', async (sysTx) => {
+      await _altaSystemPart(sysTx, params);
+      return transaction('server', (srvTx) => _altaServerPart(srvTx, params));
+    });
   },
 
-  /** Igual que altaCompleta pero participa en una transacción externa (para batch atómico). */
-  async altaCompletaEnTx(tx, params) {
-    return _altaWork(tx, params);
+  /** Parte del alta que corre en la BD system (usuario/usuarioempresa/menu). */
+  async altaSystemPart(tx, params) {
+    return _altaSystemPart(tx, params);
+  },
+
+  /** Parte del alta que corre en la BD server (sucursal/depósitos/conceptos). */
+  async altaServerPart(tx, params) {
+    return _altaServerPart(tx, params);
+  },
+
+  /**
+   * Alta "Sin Rol": crea el USUARIO con idtipo_usuario = 0 (0 no excluye de las
+   * vistas, a diferencia de -1 que marca plantillas de rol), copia MENU_GENERAL
+   * desde Admin con permiso = 0 (igual que un rol nuevo) e inicializa
+   * USUARIOEMPRESA en blanco. No asigna sucursal/depósitos/conceptos: queda como
+   * un lienzo en blanco para configurar luego en el editor de Accesos. Los menús
+   * de Contab./RRHH (master) se muestran igualmente en el editor, sin activar.
+   */
+  async altaSinRol({ iduser, nombre, apellido, documento }) {
+    return transaction('system', async (tx) => {
+      await tx.query(
+        `INSERT INTO usuario (iduser, nombre, apellido, pass, estado, idempresa, idtipo_usuario, documento, control, hasta_vigencia)
+         VALUES (?, ?, ?, ?, 1, 1, 0, ?, 1, CAST('2050-12-31' AS TIMESTAMP))`,
+        [iduser, nombre, apellido, documento, documento],
+      );
+      await tx.query(
+        `INSERT INTO menu_general (idmenu_principal, idempresa, iduser, idmenu, titulo, permiso)
+         SELECT gen_id(gen_menu_general, 1), m.idempresa, ?, m.idmenu, m.titulo, 0
+           FROM menu_general m WHERE UPPER(TRIM(m.iduser)) = 'ADMIN'`,
+        [iduser],
+      );
+      await tx.query(
+        `INSERT INTO usuarioempresa (iduser, idempresa, permisos, movimientos, permiso_gg, menu_gg_2)
+         VALUES (?, 1, '', '', '', '')`,
+        [iduser],
+      );
+    });
   },
 
   // ---------------------------------------------------------------------------
@@ -350,23 +394,29 @@ const OperacionesModel = {
   },
 };
 
-/* ─── Lógica interna de alta completa (reutilizable en tx externa) ─────────── */
-async function _altaWork(tx, { iduser, idperfil, nombre, apellido, documento, idsucursal, templateIduser }) {
-  const step = async (label, sql, params) => {
-    try {
-      return await tx.query(sql, params);
-    } catch (e) {
-      const wrapped = new Error(`[${label}] ${e.message}`);
-      wrapped.status = 500;
-      throw wrapped;
-    }
-  };
+/* ─── Lógica interna de alta, separada por base de datos ──────────────────── */
 
-  // USUARIO
+/** Envuelve cada sentencia para etiquetar el error con la tabla afectada. */
+const _stepper = (tx) => async (label, sql, params) => {
+  try {
+    return await tx.query(sql, params);
+  } catch (e) {
+    const wrapped = new Error(`[${label}] ${e.message}`);
+    wrapped.status = 500;
+    throw wrapped;
+  }
+};
+
+/** Parte del alta en BD **system**: USUARIO + USUARIOEMPRESA + MENU_GENERAL. */
+async function _altaSystemPart(tx, { iduser, idperfil, nombre, apellido, documento, templateIduser }) {
+  const step = _stepper(tx);
+
+  // USUARIO — vigencia por defecto 31/12/2050 (sin caducidad efectiva). En el alta
+  // unitaria, el controller la sobreescribe con la fecha del formulario si difiere.
   await step(
     'USUARIO',
-    `INSERT INTO usuario (iduser, nombre, apellido, pass, estado, idempresa, idtipo_usuario, documento, control)
-     VALUES (?, ?, ?, ?, 1, 1, ?, ?, 1)`,
+    `INSERT INTO usuario (iduser, nombre, apellido, pass, estado, idempresa, idtipo_usuario, documento, control, hasta_vigencia)
+     VALUES (?, ?, ?, ?, 1, 1, ?, ?, 1, CAST('2050-12-31' AS TIMESTAMP))`,
     [iduser, nombre, apellido, documento, idperfil, documento],
   );
 
@@ -388,6 +438,14 @@ async function _altaWork(tx, { iduser, idperfil, nombre, apellido, documento, id
        FROM menu_general m WHERE m.iduser = ?`,
     [iduser, templateIduser],
   );
+}
+
+/**
+ * Parte del alta en BD **server**: USUARIO_SUCURSAL + USUARIO_DEPOSITO +
+ * USUARIO_DEPOSITO1 + USUARIO_CONCEPTO (todas copiando del template del perfil).
+ */
+async function _altaServerPart(tx, { iduser, idsucursal, templateIduser }) {
+  const step = _stepper(tx);
 
   // USUARIO_SUCURSAL (orden 1 = la elegida, 2 = el resto)
   await step(

@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useReactTable,
@@ -38,6 +38,8 @@ type Props = {
   selectedIds?: Set<string>;
   onToggleSelected?: (iduser: string) => void;
   onToggleAllSelected?: (ids: string[]) => void;
+  /** Reporta las filas actualmente visibles (filtradas + ordenadas, sin paginar) para exportar solo lo filtrado */
+  onVisibleRowsChange?: (rows: Usuario[]) => void;
 };
 
 const ESTADO_OPTS = ['Activo', 'Bloqueado', 'Inactivo'];
@@ -49,7 +51,7 @@ const sinDocumentoFn: FilterFn<any> = (row) => {
 };
 sinDocumentoFn.autoRemove = (val: any) => !val;
 
-export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selectedId, onSelect, onEditar, onReset, onBaja, onReactivar, onVincularLegajo, gastronomia, onHistorial, onSucursal, multiSelect, selectedIds, onToggleSelected, onToggleAllSelected }: Props) {
+export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selectedId, onSelect, onEditar, onReset, onBaja, onReactivar, onVincularLegajo, gastronomia, onHistorial, onSucursal, multiSelect, selectedIds, onToggleSelected, onToggleAllSelected, onVisibleRowsChange }: Props) {
   const [sorting, setSorting]             = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnOrder, setColumnOrder]     = useState<string[]>([]);
@@ -59,8 +61,9 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
 
   const filteredData = useMemo(() => {
     let base = data;
-    // Modo selección múltiple: solo activos
-    if (multiSelect) base = base.filter((u) => u.estado === 1);
+    // Modo selección múltiple: solo activos y con perfil asignado (los "Sin Asignación"
+    // no participan de acciones masivas hasta que se les asigne un perfil o "Sin Rol").
+    if (multiSelect) base = base.filter((u) => u.estado === 1 && u.idtipo_usuario !== -1 && u.idtipo_usuario != null);
     if (!badgeFilter) return base;
     if (badgeFilter === 'sin_menu')  return base.filter((u) => u.sin_menu === 1);
     if (badgeFilter === 'sin_doc')   return base.filter((u) => !u.documento?.trim());
@@ -182,40 +185,46 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
       cell: ({ row: { original: u } }) => {
         if (multiSelect) return null;
         const inactivo = u.estado !== 1 && u.estado !== 2;
+        // "Sin Asignación" (-1 / null): usuario legado pendiente. Solo se habilita
+        // "Modificar" (para reasignar perfil o asignar "Sin Rol"); el resto se bloquea
+        // hasta que tenga un perfil/Sin Rol definido.
+        const sinAsig  = u.idtipo_usuario === -1 || u.idtipo_usuario == null;
         const dis = 'opacity-30 pointer-events-none';
+        const bloqOtros = inactivo || sinAsig;       // acciones distintas de Modificar
+        const editarDis = inactivo && !sinAsig;      // Modificar habilitado para sinAsig
         return (
           <div className="flex justify-end gap-0.5">
             <Link
               to={`/usuarios/${u.iduser}/accesos`}
-              className={`btn-ghost p-1 ${inactivo ? dis : ''}`}
-              title="Accesos"
-              onClick={() => !inactivo && onSelect?.(u.iduser)}
-              tabIndex={inactivo ? -1 : undefined}
+              className={`btn-ghost p-1 ${bloqOtros ? dis : ''}`}
+              title={sinAsig ? 'Asigná un perfil antes de configurar accesos' : 'Accesos'}
+              onClick={() => !bloqOtros && onSelect?.(u.iduser)}
+              tabIndex={bloqOtros ? -1 : undefined}
             >
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
             </Link>
-            <button disabled={inactivo} className={`btn-ghost p-1 ${inactivo ? dis : ''}`} title="Modificar" onClick={() => { onSelect?.(u.iduser); onEditar(u); }}>
+            <button disabled={editarDis} className={`btn-ghost p-1 ${editarDis ? dis : ''}`} title={sinAsig ? 'Asignar perfil / Editar' : 'Modificar'} onClick={() => { onSelect?.(u.iduser); onEditar(u); }}>
               <Pencil className="h-3.5 w-3.5 text-brand-600" />
             </button>
-            <button disabled={inactivo} className={`btn-ghost p-1 ${inactivo ? dis : ''}`} title="Reiniciar clave" onClick={() => { onSelect?.(u.iduser); onReset(u.iduser); }}>
+            <button disabled={bloqOtros} className={`btn-ghost p-1 ${bloqOtros ? dis : ''}`} title="Reiniciar clave" onClick={() => { onSelect?.(u.iduser); onReset(u.iduser); }}>
               <KeyRound className="h-3.5 w-3.5" />
             </button>
             {onHistorial && (
-              <button disabled={inactivo} className={`btn-ghost p-1 ${inactivo ? dis : ''}`} title="Historial" onClick={() => { onSelect?.(u.iduser); onHistorial(u.iduser); }}>
+              <button disabled={bloqOtros} className={`btn-ghost p-1 ${bloqOtros ? dis : ''}`} title="Historial" onClick={() => { onSelect?.(u.iduser); onHistorial(u.iduser); }}>
                 <History className="h-3.5 w-3.5 text-indigo-600" />
               </button>
             )}
             {onSucursal && (
-              <button disabled={inactivo} className={`btn-ghost p-1 ${inactivo ? dis : ''}`} title="Sucursal" onClick={() => { onSelect?.(u.iduser); onSucursal(u); }}>
+              <button disabled={bloqOtros} className={`btn-ghost p-1 ${bloqOtros ? dis : ''}`} title="Sucursal" onClick={() => { onSelect?.(u.iduser); onSucursal(u); }}>
                 <MapPin className="h-3.5 w-3.5 text-teal-600" />
               </button>
             )}
-            {gastronomia && onVincularLegajo && !inactivo && (
+            {gastronomia && onVincularLegajo && !bloqOtros && (
               <button className="btn-ghost p-1" title="Vincular a Legajo (RH/Mesero)" onClick={() => { onSelect?.(u.iduser); onVincularLegajo(u.iduser); }}>
                 <Link2 className="h-3.5 w-3.5 text-fuchsia-600" />
               </button>
             )}
-            {inactivo ? (
+            {!sinAsig && (inactivo ? (
               <button className="btn-ghost p-1" title="Reactivar" onClick={() => { onSelect?.(u.iduser); onReactivar(u.iduser); }}>
                 <Power className="h-3.5 w-3.5 text-emerald-600" />
               </button>
@@ -223,7 +232,7 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
               <button className="btn-ghost p-1" title="Dar de baja" onClick={() => { onSelect?.(u.iduser); onBaja(u.iduser); }}>
                 <Power className="h-3.5 w-3.5 text-rose-600" />
               </button>
-            )}
+            ))}
           </div>
         );
       },
@@ -257,8 +266,14 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
   };
 
   const { pageIndex, pageSize } = table.getState().pagination;
-  const totalRows = table.getFilteredRowModel().rows.length;
+  const sortedRows = table.getSortedRowModel().rows;
+  const totalRows = sortedRows.length;
   const pageCount = table.getPageCount();
+
+  // Reportar al padre las filas visibles (filtradas + ordenadas) para exportar solo lo filtrado
+  useEffect(() => {
+    onVisibleRowsChange?.(sortedRows.map((r) => r.original));
+  }, [sortedRows, onVisibleRowsChange]);
 
   const selectCls = 'mt-1 w-full rounded border border-zinc-200 bg-white px-1 py-0.5 text-[10px] font-normal normal-case tracking-normal text-zinc-700 focus:border-brand-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200';
   const inputCls  = 'mt-1 w-full rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] font-normal normal-case tracking-normal text-zinc-700 placeholder-zinc-300 focus:border-brand-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 dark:placeholder-zinc-500';
@@ -269,15 +284,30 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
       {/* Toolbar superior */}
       <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
         <span className="text-zinc-400">{totalRows} registro{totalRows !== 1 ? 's' : ''}</span>
-        <div className="flex items-center gap-2">
-          <span>Filas:</span>
-          <select
-            value={pageSize}
-            onChange={(e) => table.setPageSize(Number(e.target.value))}
-            className="rounded border border-zinc-200 px-1.5 py-0.5 text-xs focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200"
-          >
-            {[20, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+        <div className="flex items-center gap-3">
+          {/* Paginador (arriba) */}
+          <div className="flex items-center gap-1">
+            <button className="btn-ghost p-1 disabled:opacity-30" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="px-1 tabular-nums">
+              {pageCount === 0 ? '0 / 0' : `${pageIndex + 1} / ${pageCount}`}
+            </span>
+            <button className="btn-ghost p-1 disabled:opacity-30" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <span className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+          <div className="flex items-center gap-2">
+            <span>Filas:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => table.setPageSize(Number(e.target.value))}
+              className="rounded border border-zinc-200 px-1.5 py-0.5 text-xs focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200"
+            >
+              {[20, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -386,6 +416,8 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
           <tbody>
             {table.getRowModel().rows.map((row) => {
               const isSelected = selectedId === row.original.iduser;
+              // "Sin Asignación" (-1 / null): fila atenuada (pendiente de asignar perfil).
+              const sinAsig = row.original.idtipo_usuario === -1 || row.original.idtipo_usuario == null;
               return (
                 <tr
                   key={row.id}
@@ -393,7 +425,9 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
                   className={`cursor-pointer border-t border-zinc-100 dark:border-zinc-700/60 ${
                     isSelected
                       ? 'bg-brand-100 hover:bg-brand-200 dark:bg-brand-900/30 dark:hover:bg-brand-900/50'
-                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                      : sinAsig
+                        ? 'bg-zinc-50/60 text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800/30 dark:text-zinc-500'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
                   }`}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -410,19 +444,6 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
             )}
           </tbody>
         </table>
-      </div>
-
-      {/* Paginador inferior */}
-      <div className="flex items-center justify-end gap-1 border-t border-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-        <button className="btn-ghost p-1 disabled:opacity-30" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <span className="px-1 tabular-nums">
-          {pageCount === 0 ? '0 / 0' : `${pageIndex + 1} / ${pageCount}`}
-        </span>
-        <button className="btn-ghost p-1 disabled:opacity-30" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-          <ChevronRight className="h-4 w-4" />
-        </button>
       </div>
 
     </div>

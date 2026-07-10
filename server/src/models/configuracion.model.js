@@ -7,6 +7,7 @@ const COLS = `ip, server, SYSTEM_BD AS SYS_CFG, MASTER_BD AS MASTER, user_bd, cl
               legajo, biometrico, gastronomia, maximo,
               complementario, ruta_archivo, version_nro, autorizado,
               contabilidad, talento_humano, dias_inactividad,
+              COALESCE(crear_sin_rol, 1) AS crear_sin_rol,
               metadata_ejecutado`;
 
 const ConfiguracionModel = {
@@ -30,15 +31,15 @@ const ConfiguracionModel = {
            (ip, server, SYSTEM_BD, MASTER_BD, user_bd, clave,
             legajo, biometrico, gastronomia, maximo,
             complementario, ruta_archivo, version_nro, autorizado,
-            contabilidad, talento_humano, dias_inactividad, metadata_ejecutado)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            contabilidad, talento_humano, dias_inactividad, crear_sin_rol, metadata_ejecutado)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           data.ip, data.server, data.sys_cfg, data.master, data.user_bd, data.clave,
           data.legajo ?? 0, data.biometrico ?? 0, data.gastronomia ?? 0,
           data.maximo ?? null, data.complementario ?? 0,
           data.ruta_archivo ?? null, data.version_nro ?? null, data.autorizado ?? null,
           data.contabilidad ?? 0, data.talento_humano ?? 0,
-          data.dias_inactividad ?? 90, data.metadata_ejecutado ?? 0,
+          data.dias_inactividad ?? 90, data.crear_sin_rol ?? 1, data.metadata_ejecutado ?? 0,
         ],
       );
     });
@@ -54,6 +55,7 @@ const ConfiguracionModel = {
         ruta_archivo: 'ruta_archivo', version_nro: 'version_nro', autorizado: 'autorizado',
         contabilidad: 'contabilidad', talento_humano: 'talento_humano',
         dias_inactividad: 'dias_inactividad',
+        crear_sin_rol: 'crear_sin_rol',
         metadata_ejecutado: 'metadata_ejecutado',
       };
       const sets = [];

@@ -76,6 +76,7 @@ router.get(
   requireAuthorized,
   validate({ query: z.object({
     dias: z.coerce.number().int().min(1).max(3650).optional(),
+    diasPorCaducar: z.coerce.number().int().min(0).max(3650).optional(),
     idperfil: z.coerce.number().int().positive().optional(),
   }) }),
   inactividadCtrl.listar,
@@ -102,8 +103,9 @@ router.post(
       nombre: z.string().min(1).max(25),
       apellido: z.string().min(1).max(25),
       documento: z.string().min(1).max(20),
-      idperfil: z.number().int().positive(),
-      idsucursal: z.number().int().positive(),
+      // idperfil = 0 => "Sin Rol" (usuario sin plantilla). En ese caso idsucursal es opcional.
+      idperfil: z.number().int().min(0),
+      idsucursal: z.number().int().min(0).optional(),
       control: z.number().int().min(0).max(1).default(1),
       foto: z.string().optional(),
       hasta_vigencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -143,7 +145,8 @@ router.post(
 );
 router.post(
   '/:iduser/cambiar-perfil',
-  validate({ ...idParam, body: z.object({ idperfil: z.number().int().positive() }) }),
+  // idperfil = 0 => "Sin Rol" (sin plantilla). Se permite >= 0.
+  validate({ ...idParam, body: z.object({ idperfil: z.number().int().min(0) }) }),
   ctrl.cambiarPerfil,
 );
 router.get('/:iduser/historial', validate(idParam), ctrl.historial);

@@ -174,6 +174,10 @@ CREATE SEQUENCE GEN_MENU_GENERAL;
 
 18 permisos del módulo PDV (índices 0–17). Gestionados vía inicialización de metadatos (ver §5).
 
+### 2.6 Datos de referencia — `TMP$USUARIO_PERMISOS_CONCEPTOS`
+
+15 permisos de acción por concepto (índices 0–14), correspondientes a las posiciones de `USUARIO_CONCEPTO.PERMISO_VARIOS`. Gestionados vía inicialización de metadatos (ver §5). Si la tabla está vacía, el cliente usa una lista de respaldo equivalente.
+
 ---
 
 ## 3. Base de Datos `server_*`
@@ -320,7 +324,7 @@ ALTER TABLE GG_MESERO ADD PRIMARY KEY (IDMESERO);
 | `VENDEDOR` | Personalización de conceptos |
 | `PLANVENTA` | Planes de venta |
 | `CONDICION` | Condiciones de venta |
-| `TIPOMOVIMIENTO` | Tipos de movimiento para `USUARIO_CONCEPTO` |
+| `TIPOMOVIMIENTO` | Tipos de movimiento para `USUARIO_CONCEPTO`. Requiere columna `ESTADO` (`1` = habilitado); la inicialización de metadatos la crea si falta y la fija en `1`. |
 | `REGISTRO` | Log de actividad — base del módulo de inactividad |
 | `RH_CARGO` | Vinculación con legajos RRHH |
 | `RH_PERSONA` | Personas RRHH (búsqueda por documento) |
@@ -447,10 +451,12 @@ POST /api/configuracion/metadata/ejecutar
   ├─ Transacción BD system
   │    ├─ DELETE + INSERT TMP$USUARIO_PERMISOS_GENERALES  (39 registros)
   │    ├─ DELETE + INSERT TMP$USUARIO_PERMISOS_PDV        (18 registros)
+  │    ├─ DELETE + INSERT TMP$USUARIO_PERMISOS_CONCEPTOS  (15 registros)
   │    └─ UPDATE OR INSERT TIPO_USUARIO                   (11 registros)
   │
   ├─ Transacción BD server
   │    ├─ UPDATE OR INSERT TIPO_OPERACION                 (11 registros)
+  │    ├─ ALTER TABLE TIPOMOVIMIENTO ADD ESTADO (si falta) + UPDATE estado = 1
   │    └─ UPDATE configuracion_usuario SET metadata_ejecutado = 1
   │
   └─ Auditoría: HISTORIAL_USUARIO (operación 7 — Actualización de Cuenta)

@@ -45,9 +45,9 @@ export default function ReportesPage() {
     if (!q) return all.slice(0, 200);
     return all.filter(
       (u) =>
-        u.iduser.toUpperCase().includes(q) ||
-        u.nombre.toUpperCase().includes(q) ||
-        u.apellido.toUpperCase().includes(q) ||
+        (u.iduser || '').toUpperCase().includes(q) ||
+        (u.nombre || '').toUpperCase().includes(q) ||
+        (u.apellido || '').toUpperCase().includes(q) ||
         (u.documento || '').includes(q),
     ).slice(0, 200);
   }, [usuariosQ.data, busqueda]);
@@ -129,7 +129,9 @@ export default function ReportesPage() {
               className="input w-full py-1.5 text-sm"
             >
               <option value="">— seleccionar —</option>
-              {roles.map((r) => (
+              {roles
+                .filter((r) => r.idtipo_usuario !== -1) /* "Sin Asignación" no es un rol reporteable */
+                .map((r) => (
                 <option key={r.idtipo_usuario} value={r.idtipo_usuario}>
                   {r.descripcion}
                 </option>

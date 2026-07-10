@@ -5,7 +5,7 @@ import toast from '../../lib/notify';
 import { ConfiguracionAPI, type Configuracion, type Operacion, type MetadataResultado } from '../../api/endpoints';
 import { useConfirm } from '../../hooks/useConfirm';
 
-type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'complementario'|'contabilidad'|'talento_humano'> & {
+type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'complementario'|'contabilidad'|'talento_humano'|'crear_sin_rol'> & {
   clave:          string;
   legajo:         boolean;
   biometrico:     boolean;
@@ -13,12 +13,13 @@ type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'compleme
   complementario: boolean;
   contabilidad:   boolean;
   talento_humano: boolean;
+  crear_sin_rol:  boolean;
 };
 
 const emptyForm: CfgForm = {
   ip: '', server: '', sys_cfg: '', master: '', user_bd: '', clave: '',
   legajo: false, biometrico: false, gastronomia: false, complementario: false,
-  contabilidad: false, talento_humano: false,
+  contabilidad: false, talento_humano: false, crear_sin_rol: true,
   maximo: null, ruta_archivo: null, version_nro: null, autorizado: null,
 };
 
@@ -31,20 +32,25 @@ const toForm = (r: Configuracion & { clave?: string }): CfgForm => ({
   complementario: r.complementario === 1,
   contabilidad:   r.contabilidad === 1,
   talento_humano: r.talento_humano === 1,
+  crear_sin_rol:  (r.crear_sin_rol ?? 1) === 1,
 });
 
-const fromForm = (f: CfgForm) => ({
-  ...f,
-  legajo:         f.legajo ? 1 : 0,
-  biometrico:     f.biometrico ? 1 : 0,
-  gastronomia:    f.gastronomia ? 1 : 0,
-  complementario: f.complementario ? 1 : 0,
-  contabilidad:   f.contabilidad ? 1 : 0,
-  talento_humano: f.talento_humano ? 1 : 0,
-  maximo:         f.maximo === null || f.maximo === ('' as any) ? null : Number(f.maximo),
-  // Omitir clave si está vacía (no cambiar)
-  ...(f.clave?.trim() ? { clave: f.clave.trim() } : {}),
-});
+const fromForm = (f: CfgForm) => {
+  const { clave, ...rest } = f;
+  return {
+    ...rest,
+    legajo:         f.legajo ? 1 : 0,
+    biometrico:     f.biometrico ? 1 : 0,
+    gastronomia:    f.gastronomia ? 1 : 0,
+    complementario: f.complementario ? 1 : 0,
+    contabilidad:   f.contabilidad ? 1 : 0,
+    talento_humano: f.talento_humano ? 1 : 0,
+    crear_sin_rol:  f.crear_sin_rol ? 1 : 0,
+    maximo:         f.maximo === null || f.maximo === ('' as any) ? null : Number(f.maximo),
+    // Omitir clave si está vacía (no cambiar la existente)
+    ...(clave?.trim() ? { clave: clave.trim() } : {}),
+  };
+};
 
 const Flag = ({ v }: { v: boolean }) =>
   v ? <span className="text-emerald-600 font-bold">✓</span>
@@ -313,6 +319,7 @@ export default function ConfiguracionPage() {
                 <li>Permisos PDV: <strong>{metaM.data.detalle.permisos_pdv}</strong></li>
                 <li>Tipos de Usuario: <strong>{metaM.data.detalle.tipo_usuario}</strong></li>
                 <li>Tipos de Operación: <strong>{metaM.data.detalle.tipo_operacion}</strong></li>
+                <li>Usuarios sin rol → «Sin Asignación»: <strong>{metaM.data.detalle.usuarios_sin_rol ?? 0}</strong></li>
               </ul>
             </div>
           )}
@@ -439,6 +446,7 @@ export default function ConfiguracionPage() {
                   ['complementario', 'Complementario'],
                   ['contabilidad',   'Contabilidad (BD Master)'],
                   ['talento_humano', 'Talento Humano (BD Master)'],
+                  ['crear_sin_rol',  'Permitir crear usuarios "Sin Rol"'],
                 ] as [keyof CfgForm, string][]).map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 cursor-pointer select-none text-sm text-zinc-700">
                     <input type="checkbox" className="h-4 w-4 rounded accent-brand-600"

@@ -11,7 +11,7 @@ const logger = require('../utils/logger');
  * fecha de vigencia es una decisión explícita del operador al dar de alta.
  *
  * Habilitar/deshabilitar vía env: ENABLE_VIGENCIA_JOB=1 (default: habilitado).
- * Horario:                        VIGENCIA_CRON (default 05:00 cada día).
+ * Horario:                        VIGENCIA_CRON (default 04:00 cada día).
  */
 function start() {
   if (process.env.ENABLE_VIGENCIA_JOB === '0') {
@@ -19,7 +19,7 @@ function start() {
     return null;
   }
 
-  const expr = process.env.VIGENCIA_CRON || '0 5 * * *'; // 05:00 cada día
+  const expr = process.env.VIGENCIA_CRON || '0 4 * * *'; // 04:00 cada día
   if (!cron.validate(expr)) {
     logger.warn({ expr }, '[jobs] expresión cron inválida para vigencia job');
     return null;

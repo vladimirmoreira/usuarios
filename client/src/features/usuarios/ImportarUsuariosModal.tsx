@@ -1,10 +1,12 @@
 'use client';
 import { useRef, useState, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Upload, X, AlertTriangle, CheckCircle, Download, FileText } from 'lucide-react';
 import toast from '../../lib/notify';
 import {
   UsuariosAPI,
+  RolesAPI,
+  type Rol,
   type FilaImportacion,
   type FilaImportada,
   type ErrorImportacion,
@@ -98,7 +100,19 @@ export default function ImportarUsuariosModal({ onClose }: Props) {
   const [archivoErr, setArchivoErr] = useState<string | null>(null);
   const [errWriteTxt, setErrWriteTxt] = useState<string | null>(null);
 
-  /** Pre-validación cliente: duplicados de documento + campos requeridos vacíos. */
+  // Catálogo de roles (para validar que el perfil tenga permisos activos).
+  const perfilesQ = useQuery({ queryKey: ['perfiles-all'], queryFn: () => RolesAPI.listar() });
+  const { perfById, perfByDesc } = useMemo(() => {
+    const byId = new Map<number, Rol>();
+    const byDesc = new Map<string, Rol>();
+    for (const p of perfilesQ.data ?? []) {
+      byId.set(Number(p.idtipo_usuario), p);
+      byDesc.set((p.descripcion || '').toUpperCase().trim(), p);
+    }
+    return { perfById: byId, perfByDesc: byDesc };
+  }, [perfilesQ.data]);
+
+  /** Pre-validación cliente: duplicados de documento + campos requeridos + rol sin permisos. */
   const rowIssues = useMemo<string[][]>(() => {
     if (!filas.length) return [];
     const docMap = new Map<string, number[]>();
@@ -109,6 +123,7 @@ export default function ImportarUsuariosModal({ onClose }: Props) {
         docMap.get(doc)!.push(i);
       }
     });
+    const catalogoListo = (perfilesQ.data?.length ?? 0) > 0;
     return filas.map((f, i) => {
       const issues: string[] = [];
       if (!f.nombre.trim())             issues.push('nombre vacío');
@@ -119,11 +134,23 @@ export default function ImportarUsuariosModal({ onClose }: Props) {
       } else if ((docMap.get(doc)?.length ?? 0) > 1) {
         issues.push(`documento «${doc}» repetido`);
       }
-      if (!String(f.perfil).trim())     issues.push('perfil vacío');
+      const perfilStr = String(f.perfil).trim();
+      if (!perfilStr) {
+        issues.push('perfil vacío');
+      } else if (catalogoListo) {
+        // Resolver el perfil (por id o por descripción exacta) y exigir permisos activos.
+        const num = Number(perfilStr);
+        const perf = (!isNaN(num) && Number.isInteger(num) ? perfById.get(num) : undefined)
+          ?? perfByDesc.get(perfilStr.toUpperCase());
+        if (perf && (perf.permisos_activos ?? 1) === 0) {
+          issues.push(`rol «${perf.descripcion}» sin permisos activos: configurá los permisos del rol antes de importar`);
+        }
+        // Si no resuelve (rol inexistente/inactivo) lo valida el servidor.
+      }
       if (!String(f.idsucursal).trim()) issues.push('sucursal vacía');
       return issues;
     });
-  }, [filas]);
+  }, [filas, perfilesQ.data, perfById, perfByDesc]);
 
   const filasConProblemas = rowIssues.filter((r) => r.length > 0).length;
 

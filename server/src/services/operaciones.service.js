@@ -19,6 +19,7 @@
  */
 
 const OperacionesModel = require('../models/operaciones.model');
+const AccesosService = require('./accesos.service');
 const MasterSyncService = require('./masterSync.service');
 const { auditarDirecto } = require('../utils/audit');
 const { transaction } = require('../config/firebird');
@@ -152,6 +153,23 @@ const OperacionesService = {
   },
 
   // ===========================================================================
+  // ALTA SIN ROL — usuario sin plantilla (idtipo_usuario = 0)
+  // ===========================================================================
+  async altaSinRol(ctx) {
+    const { iduser, nombre, apellido, documento, rptUser, ip } = ctx;
+    if (await OperacionesModel.existeUsuario(iduser)) {
+      const e = new Error('El usuario ya existe'); e.status = 400; throw e;
+    }
+    await OperacionesModel.altaSinRol({ iduser, nombre, apellido, documento });
+    await audit({ iduser, idoperacion: OP.ALTA, rptUser,
+      observacion: `Alta sin rol · Doc=${documento}` });
+    // Replicación a master no aplica (idtipo_usuario=0 no tiene rol master),
+    // pero el editor muestra Contab./RRHH sin activar si el pool está habilitado.
+    void ip;
+    return { ok: true, mensaje: 'EXITOSO' };
+  },
+
+  // ===========================================================================
   // IMPORTACIÓN MASIVA — alta atómica (todo o nada en system DB)
   // ===========================================================================
   /**
@@ -172,28 +190,40 @@ const OperacionesService = {
       tplMap.set(p.fila, tpl);
     }
 
-    // ── Transacción atómica en system DB ────────────────────────────────────
-    // Si cualquier INSERT falla, ROLLBACK de todo el lote.
-    let procesamientoFalla = null;
-    await transaction('system', async (tx) => {
+    // ── Transacción atómica en dos bases (system + server) ──────────────────
+    // Las tablas de sucursal/depósitos/conceptos viven en `server`; el resto en
+    // `system`. La tx de `server` va anidada dentro de la de `system`: si algún
+    // INSERT falla (en cualquiera de las dos bases), ambas revierten en cascada,
+    // manteniendo el "todo o nada" del lote.
+    const wrapFila = (p, e) => {
+      const wrapped = new Error(`Fila ${p.fila} (${p.iduser}): ${e.message}`);
+      wrapped.fila   = p.fila;
+      wrapped.iduser = p.iduser;
+      return wrapped;
+    };
+    await transaction('system', async (sysTx) => {
+      // 1) Parte system de todos los usuarios
       for (const p of batch) {
         const tpl = tplMap.get(p.fila);
         try {
-          await OperacionesModel.altaCompletaEnTx(tx, {
+          await OperacionesModel.altaSystemPart(sysTx, {
             iduser: p.iduser, idperfil: p.idperfil,
             nombre: p.nombre, apellido: p.apellido,
-            documento: p.documento, idsucursal: p.idsucursal,
-            templateIduser: tpl.iduser,
+            documento: p.documento, templateIduser: tpl.iduser,
           });
-        } catch (e) {
-          // Enriquecer con contexto del usuario y forzar rollback
-          const wrapped = new Error(`Fila ${p.fila} (${p.iduser}): ${e.message}`);
-          wrapped.fila   = p.fila;
-          wrapped.iduser = p.iduser;
-          procesamientoFalla = wrapped;
-          throw wrapped;
-        }
+        } catch (e) { throw wrapFila(p, e); }
       }
+      // 2) Parte server de todos los usuarios (revierte system si falla)
+      await transaction('server', async (srvTx) => {
+        for (const p of batch) {
+          const tpl = tplMap.get(p.fila);
+          try {
+            await OperacionesModel.altaServerPart(srvTx, {
+              iduser: p.iduser, idsucursal: p.idsucursal, templateIduser: tpl.iduser,
+            });
+          } catch (e) { throw wrapFila(p, e); }
+        }
+      });
     });
 
     // ── Post-effects (best-effort, fuera de la tx principal) ────────────────
@@ -386,15 +416,38 @@ const OperacionesService = {
     if (Number(u.idtipo_usuario) === Number(idperfil)) {
       return { ok: true, mensaje: 'EXITOSO', detalle: 'Sin cambios' };
     }
-    const perfil = await OperacionesModel.perfilExisteActivo(idperfil);
-    if (!perfil || Number(perfil.estado) !== 1) {
-      const e = new Error('Perfil inv\u00e1lido o inactivo'); e.status = 400; throw e;
+    // idperfil = 0 => "Sin Rol": no requiere plantilla; solo re-etiqueta idtipo_usuario.
+    // \u00datil para sacar a un usuario "Sin Asignaci\u00f3n" (-1) de ese limbo asign\u00e1ndole Sin Rol.
+    if (Number(idperfil) !== 0) {
+      const perfil = await OperacionesModel.perfilExisteActivo(idperfil);
+      if (!perfil || Number(perfil.estado) !== 1) {
+        const e = new Error('Perfil inv\u00e1lido o inactivo'); e.status = 400; throw e;
+      }
     }
     const flags = await cargarContexto(ip);
 
     const d = [];
     await OperacionesModel.cambiarPerfilUsuario(iduser, idperfil);
     d.push(`[system] UPDATE USUARIO.idtipo_usuario ${u.idtipo_usuario} → ${idperfil}`);
+
+    // "Reemplazar todo": al asignar un rol real, copiar sus accesos (menú, permisos
+    // generales/movimientos/pdv/gg y conceptos) desde la plantilla del rol al usuario.
+    // No aplica a "Sin Rol" (0) ni "Sin Asignación" (-1), que no tienen plantilla.
+    let notaPersonalizado = null;
+    if (Number(idperfil) > 0) {
+      try {
+        const res = await AccesosService.aplicarRolAUsuario(iduser, idperfil);
+        if (res.aplicado) {
+          d.push('[system/server] Accesos copiados desde la plantilla del rol (menú, permisos, conceptos, sucursales, depósitos)');
+        } else if (res.motivo === 'personalizado') {
+          notaPersonalizado = 'Usuario Personalizado: se cambió el perfil pero NO se copiaron los accesos del rol. Para reemplazarlos, incluílo desde «Propagar».';
+          d.push('[info] Usuario Personalizado (exclusion_permisos=1): no se copiaron los accesos del rol');
+        }
+      } catch (e) {
+        logger.warn({ err: e?.message, iduser, idperfil }, 'cambiarPerfil: no se pudieron copiar los accesos del rol');
+        d.push('[warn] No se pudieron copiar todos los accesos del rol; usar «Propagar» desde el rol');
+      }
+    }
 
     if (flags.gastronomia) {
       const n = await OperacionesModel.actualizarMeseroPerfil(iduser, idperfil);
@@ -403,7 +456,7 @@ const OperacionesService = {
 
     replicarMaster(iduser, { ip });
     await audit({ iduser, idoperacion: OP.CAMBIO_PERFIL, rptUser, observacion: buildDetalle(d) });
-    return { ok: true, mensaje: 'EXITOSO' };
+    return { ok: true, mensaje: 'EXITOSO', ...(notaPersonalizado ? { detalle: notaPersonalizado } : {}) };
   },
 
   // ===========================================================================

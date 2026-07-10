@@ -85,7 +85,13 @@ const UsuarioController = {
         return res.status(400).json({ error: 'El documento ya está registrado para otro usuario' });
       }
 
-      const result = await OperacionesService.altaUsuario({ ...rest, rptUser, ip: ipDe(req) });
+      // idperfil = 0 => "Sin Rol": alta sin plantilla (menú de Admin sin permisos).
+      const result = Number(rest.idperfil) === 0
+        ? await OperacionesService.altaSinRol({
+            iduser: rest.iduser, nombre: rest.nombre, apellido: rest.apellido,
+            documento: rest.documento, rptUser, ip: ipDe(req),
+          })
+        : await OperacionesService.altaUsuario({ ...rest, rptUser, ip: ipDe(req) });
 
       if (foto) {
         try { await UsuarioModel.actualizarFoto(rest.iduser, foto); } catch (_) { /* la foto no bloquea */ }
@@ -322,7 +328,9 @@ const UsuarioController = {
         const rowErr = [];
 
         if (!nombre.trim())   rowErr.push('nombre: requerido');
+        else if (nombre.trim().length > 25)   rowErr.push(`nombre: máximo 25 caracteres (recibido ${nombre.trim().length})`);
         if (!apellido.trim()) rowErr.push('apellido: requerido');
+        else if (apellido.trim().length > 25) rowErr.push(`apellido: máximo 25 caracteres (recibido ${apellido.trim().length})`);
 
         // Documento
         const doc = String(documento).trim();
@@ -361,6 +369,13 @@ const UsuarioController = {
               `perfil: "${perfilObj.descripcion}" no tiene usuario-plantilla configurado (asignarlo en Roles)`,
             );
             perfilObj = null; // invalidar para que no pase a válidos
+          } else if (Number(perfilObj.permisos_activos ?? 0) === 0) {
+            // El rol no tiene ningún permiso de menú activo: importarlo dejaría a los
+            // usuarios sin accesos. Se bloquea hasta configurar los permisos del rol.
+            rowErr.push(
+              `perfil: "${perfilObj.descripcion}" no tiene permisos activos. Configurá primero los permisos del rol antes de importar.`,
+            );
+            perfilObj = null;
           }
         }
 

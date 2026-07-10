@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Copy, Check, User } from 'lucide-react';
+import { Download, Copy, Check, User, CheckSquare, Square } from 'lucide-react';
 import type { FichaUsuario } from '../../api/endpoints';
 import api from '../../api/client';
 import toast from '../../lib/notify';
@@ -260,6 +260,31 @@ export function Chips({ items }: { items: string[] }) {
   );
 }
 
+/**
+ * Lista de permisos del catálogo con indicador de check (activado / no).
+ * Se usa en la Ficha de Rol para mostrar TODO el catálogo y cuáles están marcados.
+ */
+export function ChecklistPermisos({
+  catalogo, flags,
+}: { catalogo: { descripcion: string }[]; flags: boolean[] }) {
+  if (!catalogo.length) return <Vacio>Sin catálogo de permisos.</Vacio>;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-0.5 text-[11px]">
+      {catalogo.map((c, i) => {
+        const on = !!flags[i];
+        return (
+          <div key={i} className="flex items-center gap-1">
+            {on
+              ? <CheckSquare className="h-3 w-3 shrink-0 text-emerald-600" />
+              : <Square className="h-3 w-3 shrink-0 text-zinc-300" />}
+            <span className={on ? 'text-zinc-800' : 'text-zinc-400'}>{c.descripcion}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Badge({
   children, color = 'zinc',
 }: { children: React.ReactNode; color?: 'zinc' | 'green' | 'red' | 'amber' | 'brand' }) {
@@ -385,38 +410,56 @@ function formatFecha(s: string): string {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
-// Tabla compacta de conceptos por tipo
-export function ConceptosTable({ data }: { data: FichaUsuario['conceptos'] }) {
+// Tabla compacta de conceptos por tipo.
+// - mostrarTodos=false (Ficha Usuario): solo los conceptos habilitados (permiso=1).
+// - mostrarTodos=true  (Ficha Rol): TODO el catálogo, con indicador de check por concepto.
+export function ConceptosTable({
+  data, mostrarTodos = false,
+}: { data: FichaUsuario['conceptos']; mostrarTodos?: boolean }) {
   if (!data.grupos.length) return <Vacio>Sin tipos de movimiento.</Vacio>;
   return (
     <div className="space-y-2">
       {data.grupos.map((g) => {
         const activos = g.conceptos.filter((c) => c.permiso);
+        const lista = mostrarTodos ? g.conceptos : activos;
         return (
           <div key={g.tipo} className="break-inside-avoid">
             <p className="text-xs font-semibold text-zinc-700 mb-1">
               {g.label} <span className="text-zinc-400">({activos.length} de {g.conceptos.length})</span>
             </p>
-            {activos.length === 0 ? <Vacio>Sin conceptos activos.</Vacio> : (
+            {lista.length === 0 ? (
+              <Vacio>{mostrarTodos ? 'Sin conceptos.' : 'Sin conceptos activos.'}</Vacio>
+            ) : (
               <table className="w-full text-[11px]">
                 <thead className="text-[10px] uppercase text-zinc-500 border-b border-zinc-200">
                   <tr>
+                    {mostrarTodos && <th className="py-0.5 pr-1 w-5"></th>}
                     <th className="py-0.5 text-left pr-2">Concepto</th>
                     <th className="py-0.5 text-left">Permisos de acción</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {activos.map((c) => {
+                  {lista.map((c) => {
+                    const on = !!c.permiso;
                     const acciones = c.permisoVarios
                       .map((v, i) => (v ? data.permisosCatalogo[i]?.descripcion : null))
                       .filter(Boolean) as string[];
                     return (
-                      <tr key={c.idtipomovimiento} className="border-b border-zinc-100 align-top">
+                      <tr key={c.idtipomovimiento} className={`border-b border-zinc-100 align-top ${mostrarTodos && !on ? 'text-zinc-400' : ''}`}>
+                        {mostrarTodos && (
+                          <td className="py-0.5 pr-1">
+                            {on
+                              ? <CheckSquare className="h-3 w-3 text-emerald-600" />
+                              : <Square className="h-3 w-3 text-zinc-300" />}
+                          </td>
+                        )}
                         <td className="py-0.5 pr-2 font-mono whitespace-nowrap">
                           {c.idtipomovimiento}-{c.descripcion}
                         </td>
                         <td className="py-0.5 text-zinc-600">
-                          {acciones.length ? acciones.join(' · ') : <span className="text-zinc-400 italic">ninguno</span>}
+                          {on
+                            ? (acciones.length ? acciones.join(' · ') : <span className="text-zinc-400 italic">ninguno</span>)
+                            : <span className="text-zinc-400">—</span>}
                         </td>
                       </tr>
                     );

@@ -4,6 +4,7 @@ const MenuModel = require('../models/menu.model');
 const PermisoModel = require('../models/permiso.model');
 const CatalogoModel = require('../models/catalogo.model');
 const ConceptoModel = require('../models/concepto.model');
+const RolModel = require('../models/rol.model');
 const UsuarioSucursalModel = require('../models/usuarioSucursal.model');
 const UsuarioDepositoModel = require('../models/usuarioDeposito.model');
 const { decodeSN, encodeSN, decode01, encode01, decodeConcepto, encodeConcepto } = require('./permisos.service');
@@ -335,77 +336,10 @@ const AccesosService = {
         // pero omitir el UPDATE de exclusion_permisos (queda con el valor actual)
         const sinDoc = !u.documento;
         try {
-          await fbTx('system', async (tx) => {
-            // menu_general: reemplazar desde plantilla
-            await tx.query(
-              `DELETE FROM menu_general WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?`,
-              [u.iduser, empresa],
-            );
-            for (const m of plantillaMenu) {
-              await tx.query(
-                `INSERT INTO menu_general (idmenu_principal, idempresa, iduser, idmenu, titulo, permiso)
-                 VALUES (gen_id(gen_menu_general, 1), ?, ?, ?, ?, ?)`,
-                [empresa, u.iduser, m.idmenu, m.titulo, m.permiso],
-              );
-            }
-
-            // usuarioempresa: upsert de flags
-            const ueVals = [
-              plantillaUe?.permisos    || '',
-              plantillaUe?.movimientos || '',
-              plantillaUe?.permiso_gg  || '',
-              plantillaUe?.menu_gg_2   || '',
-            ];
-            const existe = await tx.query(
-              `SELECT FIRST 1 iduser FROM usuarioempresa WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?`,
-              [u.iduser, empresa],
-            );
-            if (existe.length) {
-              await tx.query(
-                `UPDATE usuarioempresa SET permisos = ?, movimientos = ?, permiso_gg = ?, menu_gg_2 = ?
-                  WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?`,
-                [...ueVals, u.iduser, empresa],
-              );
-            } else {
-              await tx.query(
-                `INSERT INTO usuarioempresa (iduser, idempresa, permisos, movimientos, permiso_gg, menu_gg_2)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [u.iduser, empresa, ...ueVals],
-              );
-            }
-
-            // Unificar con el rol (solo si tiene documento, de lo contrario Firebird lanza error de constraint)
-            if (!sinDoc) {
-              await tx.query(
-                `UPDATE usuario SET exclusion_permisos = 0 WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`,
-                [u.iduser],
-              );
-            }
+          await this._copiarPlantillaAUsuario(u.iduser, u.documento, {
+            plantillaUe, plantillaMenu, plantillaConceptos,
+            templateIduser: iduser_plantilla, empresa,
           });
-
-          // usuario_concepto (server DB): reemplazar desde plantilla
-          if (plantillaConceptos.length > 0) {
-            await fbTx('server', async (tx) => {
-              await tx.query(
-                `DELETE FROM usuario_concepto WHERE UPPER(iduser) = UPPER(?)`,
-                [u.iduser],
-              );
-              for (const c of plantillaConceptos) {
-                await tx.query(
-                  `INSERT INTO usuario_concepto
-                     (iduser, idtipomovimiento, permiso, permiso_varios,
-                      idtalonario, idvendedor, idpersona, idplanventa, idcondicion)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [
-                    u.iduser, c.idtipomovimiento, c.permiso, c.permiso_varios,
-                    c.idtalonario ?? null, c.idvendedor ?? null, c.idpersona ?? null,
-                    c.idplanventa ?? null, c.idcondicion ?? null,
-                  ],
-                );
-              }
-            }).catch(() => { /* server DB puede no tener tabla */ });
-          }
-
           propagados++;
           if (sinDoc) sin_documento.push({ iduser: u.iduser });
         } catch (e) {
@@ -415,6 +349,157 @@ const AccesosService = {
     }
 
     return { propagados, excluidos: excCount, errores, sin_documento };
+  },
+
+  /**
+   * Copia los accesos de la plantilla de un rol a UN usuario: menu_general +
+   * usuarioempresa (permisos/movimientos/pdv/gg) + usuario_concepto. NO toca
+   * sucursales ni depósitos (son asignaciones propias del usuario). Si el usuario
+   * tiene documento, también lo marca como sincronizado (exclusion_permisos = 0).
+   */
+  async _copiarPlantillaAUsuario(iduser, documento, { plantillaUe, plantillaMenu, plantillaConceptos, templateIduser, empresa }) {
+    const sinDoc = !documento || !String(documento).trim();
+    await fbTx('system', async (tx) => {
+      // menu_general: reemplazar desde plantilla
+      await tx.query(
+        `DELETE FROM menu_general WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?`,
+        [iduser, empresa],
+      );
+      for (const m of plantillaMenu) {
+        await tx.query(
+          `INSERT INTO menu_general (idmenu_principal, idempresa, iduser, idmenu, titulo, permiso)
+           VALUES (gen_id(gen_menu_general, 1), ?, ?, ?, ?, ?)`,
+          [empresa, iduser, m.idmenu, m.titulo, m.permiso],
+        );
+      }
+
+      // usuarioempresa: upsert de flags
+      const ueVals = [
+        plantillaUe?.permisos    || '',
+        plantillaUe?.movimientos || '',
+        plantillaUe?.permiso_gg  || '',
+        plantillaUe?.menu_gg_2   || '',
+      ];
+      const existe = await tx.query(
+        `SELECT FIRST 1 iduser FROM usuarioempresa WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?`,
+        [iduser, empresa],
+      );
+      if (existe.length) {
+        await tx.query(
+          `UPDATE usuarioempresa SET permisos = ?, movimientos = ?, permiso_gg = ?, menu_gg_2 = ?
+            WHERE UPPER(iduser) = UPPER(?) AND idempresa = ?`,
+          [...ueVals, iduser, empresa],
+        );
+      } else {
+        await tx.query(
+          `INSERT INTO usuarioempresa (iduser, idempresa, permisos, movimientos, permiso_gg, menu_gg_2)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [iduser, empresa, ...ueVals],
+        );
+      }
+
+      // Marcar sincronizado con el rol (solo si tiene documento; si no, Firebird lanza constraint)
+      if (!sinDoc) {
+        await tx.query(
+          `UPDATE usuario SET exclusion_permisos = 0 WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`,
+          [iduser],
+        );
+      }
+    });
+
+    // BD server (usuario_concepto + sucursal + depósitos): reemplazar desde plantilla.
+    // Se copian también sucursales/depósitos del rol como línea base; luego pueden
+    // personalizarse por usuario en el editor de Accesos.
+    await fbTx('server', async (tx) => {
+      // usuario_concepto (array pre-cargado)
+      await tx.query(`DELETE FROM usuario_concepto WHERE UPPER(iduser) = UPPER(?)`, [iduser]);
+      for (const c of plantillaConceptos) {
+        await tx.query(
+          `INSERT INTO usuario_concepto
+             (iduser, idtipomovimiento, permiso, permiso_varios,
+              idtalonario, idvendedor, idpersona, idplanventa, idcondicion)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            iduser, c.idtipomovimiento, c.permiso, c.permiso_varios,
+            c.idtalonario ?? null, c.idvendedor ?? null, c.idpersona ?? null,
+            c.idplanventa ?? null, c.idcondicion ?? null,
+          ],
+        );
+      }
+
+      // usuario_sucursal / usuario_deposito / usuario_deposito1: copiar de la plantilla
+      // (preservando el orden), solo sucursales/depósitos activos.
+      if (templateIduser) {
+        await tx.query(`DELETE FROM usuario_sucursal WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`, [iduser]);
+        await tx.query(
+          `INSERT INTO usuario_sucursal (iduser, idsucursal, orden)
+           SELECT ?, s.idsucursal, s.orden FROM usuario_sucursal s
+            WHERE UPPER(TRIM(s.iduser)) = UPPER(TRIM(?))
+              AND s.idsucursal IN (SELECT idsucursal FROM sucursal WHERE COALESCE(estado,0)=1)`,
+          [iduser, templateIduser],
+        );
+
+        await tx.query(`DELETE FROM usuario_deposito WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`, [iduser]);
+        await tx.query(
+          `INSERT INTO usuario_deposito (iduser, iddeposito, orden)
+           SELECT ?, d.iddeposito, d.orden FROM usuario_deposito d
+            WHERE UPPER(TRIM(d.iduser)) = UPPER(TRIM(?))
+              AND d.iddeposito IN (SELECT iddeposito FROM deposito WHERE COALESCE(estado,0)=1)`,
+          [iduser, templateIduser],
+        );
+
+        await tx.query(`DELETE FROM usuario_deposito1 WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`, [iduser]);
+        await tx.query(
+          `INSERT INTO usuario_deposito1 (iduser, iddeposito, orden)
+           SELECT ?, d.iddeposito, d.orden FROM usuario_deposito1 d
+            WHERE UPPER(TRIM(d.iduser)) = UPPER(TRIM(?))
+              AND d.iddeposito IN (SELECT iddeposito FROM deposito WHERE COALESCE(estado,0)=1)`,
+          [iduser, templateIduser],
+        );
+      }
+    }).catch(() => { /* server DB puede no tener alguna de las tablas */ });
+
+    return { sinDoc };
+  },
+
+  /**
+   * Aplica (copia) los accesos de la plantilla de un rol real a un usuario.
+   * Usado al cambiar de perfil ("Reemplazar todo"). No hace nada para idperfil <= 0
+   * ("Sin Rol" / "Sin Asignación" no tienen plantilla).
+   *
+   * Respeta el bloqueo "Personalizado" (`exclusion_permisos = 1`): si el usuario fue
+   * marcado como personalizado, NO se sobreescriben sus accesos (mantiene su
+   * configuración propia). Para reemplazarlos, incluirlo desde «Propagar» del rol.
+   */
+  async aplicarRolAUsuario(iduser, idperfil, idempresa) {
+    if (Number(idperfil) <= 0) return { aplicado: false };
+    const rol = await RolModel.templateIduser(Number(idperfil));
+    if (!rol?.iduser) return { aplicado: false };
+
+    // Bloqueo "Personalizado": no copiar si exclusion_permisos = 1.
+    const infoRows = await fbQuery(
+      'system',
+      `SELECT FIRST 1 CAST(documento AS VARCHAR(40) CHARACTER SET OCTETS) AS documento,
+              COALESCE(exclusion_permisos, 0) AS exclusion_permisos
+         FROM usuario WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))`,
+      [iduser],
+    ).catch(() => []);
+    if (Number(infoRows[0]?.exclusion_permisos) === 1) {
+      return { aplicado: false, motivo: 'personalizado' };
+    }
+    const documento = infoRows[0]?.documento ?? null;
+
+    const empresa = emp(idempresa);
+    const [plantillaUe, plantillaMenu, plantillaConceptos] = await Promise.all([
+      PermisoModel.obtenerUsuarioEmpresa(rol.iduser, empresa),
+      MenuModel.listarPorUsuario(rol.iduser, empresa),
+      ConceptoModel.listarPorUsuario(rol.iduser).catch(() => []),
+    ]);
+    await this._copiarPlantillaAUsuario(iduser, documento, {
+      plantillaUe, plantillaMenu, plantillaConceptos,
+      templateIduser: rol.iduser, empresa,
+    });
+    return { aplicado: true, iduser, idperfil: Number(idperfil) };
   },
 };
 

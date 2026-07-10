@@ -39,7 +39,7 @@ const UsuarioModel = {
               CAST(apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
               idempresa, idtipo_usuario, estado,
               CAST(documento AS VARCHAR(40) CHARACTER SET OCTETS) AS documento,
-              control, exclusion, hasta_vigencia
+              control, COALESCE(exclusion_permisos, 0) AS exclusion_permisos, hasta_vigencia
          FROM usuario
         WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)`,
       [String(iduser || '').trim().toUpperCase()],
@@ -48,7 +48,9 @@ const UsuarioModel = {
   },
 
   async listar({ busqueda, idperfil, estado }) {
-    return UsuarioModel._listar({ busqueda, idperfil, estado, limit: 200 });
+    // Sin tope de filas: el grid debe mostrar el mismo conjunto que el CSV.
+    // (Antes tenía FIRST 200, lo que hacía que el grid mostrara 200 y el CSV el total real.)
+    return UsuarioModel._listar({ busqueda, idperfil, estado, limit: null });
   },
 
   /**
@@ -60,11 +62,13 @@ const UsuarioModel = {
 
   async _listar({ busqueda, idperfil, estado, limit, conPerfil = false }) {
     const where = [
-      // Excluir usuarios reservados:
-      //   1. Marcados con idtipo_usuario=-1 (nueva convención de plantillas de roles).
-      //   2. Que existan como plantilla en tipo_usuario.iduser (datos pre-existentes).
-      //   3. El superusuario Admin (case-insensitive), reservado solo para Roles.
-      'COALESCE(u.idtipo_usuario, 0) <> -1',
+      // Excluir SOLO usuarios reservados:
+      //   1. Las plantillas de rol (su iduser figura en tipo_usuario.iduser).
+      //   2. El superusuario Admin (case-insensitive), reservado solo para Roles.
+      // NOTA: idtipo_usuario = -1 ("Sin Asignación", usuarios legados pendientes) SÍ
+      // aparece ahora en la grilla (fila deshabilitada; ver frontend), para poder
+      // reasignarles un perfil o "Sin Rol". Las plantillas también son -1 pero quedan
+      // excluidas por el NOT IN, así que no hace falta filtrar por -1 aquí.
       'u.iduser NOT IN (SELECT iduser FROM tipo_usuario WHERE iduser IS NOT NULL)',
       "UPPER(TRIM(u.iduser)) <> 'ADMIN'",
     ];
@@ -95,7 +99,6 @@ const UsuarioModel = {
              CAST(u.apellido  AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
              CAST(u.documento AS VARCHAR(40)  CHARACTER SET OCTETS) AS documento,
              u.idtipo_usuario, u.estado, u.hasta_vigencia,
-             IIF((SELECT COUNT(*) FROM menu_general mg WHERE UPPER(TRIM(mg.iduser)) = UPPER(TRIM(u.iduser))) = 0, 1, 0) AS sin_menu,
              COALESCE(u.exclusion_permisos, 0) AS exclusion_permisos
              ${extraCols}
         FROM usuario u
@@ -103,7 +106,22 @@ const UsuarioModel = {
        WHERE ${where.join(' AND ')}
        ORDER BY u.iduser`;
     const rows = await query('system', sql, params);
-    return decodeRows(rows, ['iduser', 'nombre', 'apellido', 'documento', 'perfil']);
+    const decoded = decodeRows(rows, ['iduser', 'nombre', 'apellido', 'documento', 'perfil']);
+
+    // `sin_menu` se resuelve con UNA sola consulta (conjunto de idusers con menú) en vez
+    // de una subconsulta correlacionada por fila. La versión anterior escaneaba
+    // menu_general completa por cada usuario (UPPER/TRIM anula el índice), lo que hacía
+    // que el listado tardara minutos con cientos de usuarios.
+    const menuRows = await query(
+      'system',
+      `SELECT DISTINCT CAST(UPPER(TRIM(iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) AS iduser
+         FROM menu_general`,
+    ).catch(() => []);
+    const conMenu = new Set(menuRows.map((r) => String(r.iduser || '').trim().toUpperCase()));
+    for (const u of decoded) {
+      u.sin_menu = conMenu.has(String(u.iduser || '').trim().toUpperCase()) ? 0 : 1;
+    }
+    return decoded;
   },
 
   /** Llama al SP que orquesta el alta completa en server + system. */

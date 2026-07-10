@@ -42,10 +42,12 @@ function GlobalPermisosPanel({
   grupo,
   catalogo,
   onApply,
+  readOnly = false,
 }: {
   grupo: GrupoConceptos;
   catalogo: PermisoConcepto[];
   onApply: (conceptos: ConceptoConfig[]) => void;
+  readOnly?: boolean;
 }) {
   const activos = grupo.conceptos.filter((c) => c.permiso === 1);
   const n = activos.length;
@@ -59,6 +61,7 @@ function GlobalPermisosPanel({
   });
 
   const toggleGlobal = (i: number) => {
+    if (readOnly) return;
     const setTo = estados[i] !== 'all'; // si ya están todos, quitar; si no, poner
     onApply(
       grupo.conceptos.map((c) => {
@@ -70,13 +73,15 @@ function GlobalPermisosPanel({
     );
   };
 
-  const setAllGlobal = (v: boolean) =>
+  const setAllGlobal = (v: boolean) => {
+    if (readOnly) return;
     onApply(
       grupo.conceptos.map((c) => {
         if (c.permiso !== 1) return c;
         return { ...c, permisoVarios: c.permisoVarios.map(() => v) };
       }),
     );
+  };
 
   return (
     <div className="mb-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
@@ -84,28 +89,33 @@ function GlobalPermisosPanel({
         <span className="text-xs font-semibold uppercase tracking-wide text-brand-700">
           Permisos globales — aplica a {n} concepto{n !== 1 ? 's' : ''} activo{n !== 1 ? 's' : ''}
         </span>
-        <div className="flex gap-3 text-xs">
-          <button className="text-brand-600 hover:underline" onClick={() => setAllGlobal(true)}>
-            Marcar todos
-          </button>
-          <button className="text-zinc-400 hover:underline" onClick={() => setAllGlobal(false)}>
-            Limpiar
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex gap-3 text-xs">
+            <button className="text-brand-600 hover:underline" onClick={() => setAllGlobal(true)}>
+              Marcar todos
+            </button>
+            <button className="text-zinc-400 hover:underline" onClick={() => setAllGlobal(false)}>
+              Limpiar
+            </button>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-3 gap-x-4 gap-y-0.5">
         {catalogo.map((p, i) => (
           <button
             key={p.idpermiso_concepto}
             onClick={() => toggleGlobal(i)}
+            disabled={readOnly}
             title={
-              estados[i] === 'all'
+              readOnly
+                ? undefined
+                : estados[i] === 'all'
                 ? 'Todos los conceptos activos lo tienen — clic para quitar'
                 : estados[i] === 'partial'
                   ? 'Algunos conceptos lo tienen — clic para marcar todos'
                   : 'Ningún concepto activo lo tiene — clic para marcar todos'
             }
-            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-xs hover:bg-brand-100"
+            className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-xs ${readOnly ? 'cursor-default' : 'hover:bg-brand-100'}`}
           >
             {estados[i] === 'all' ? (
               <CheckSquare className="h-3.5 w-3.5 shrink-0 text-brand-600" />
@@ -471,18 +481,22 @@ export default function ConceptosTab({ grupos, permisosCatalogo, onChange, selec
           <span className="text-xs text-zinc-500">
             {activosConceptos}/{totalConceptos} conceptos activos
           </span>
-          <button
-            className="text-xs text-brand-600 hover:underline"
-            onClick={() => setAllConceptos(1)}
-          >
-            Marcar todos
-          </button>
-          <button
-            className="text-xs text-zinc-400 hover:underline"
-            onClick={() => setAllConceptos(0)}
-          >
-            Desmarcar todos
-          </button>
+          {!readOnly && (
+            <>
+              <button
+                className="text-xs text-brand-600 hover:underline"
+                onClick={() => setAllConceptos(1)}
+              >
+                Marcar todos
+              </button>
+              <button
+                className="text-xs text-zinc-400 hover:underline"
+                onClick={() => setAllConceptos(0)}
+              >
+                Desmarcar todos
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -490,6 +504,7 @@ export default function ConceptosTab({ grupos, permisosCatalogo, onChange, selec
       <GlobalPermisosPanel
         grupo={grupoActivo}
         catalogo={catalogo}
+        readOnly={readOnly}
         onApply={(conceptos) => updateGrupo(idxActivo, { ...grupoActivo, conceptos })}
       />
 

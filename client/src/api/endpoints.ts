@@ -67,7 +67,7 @@ export const UsuariosAPI = {
     api.get<TurnoSucursal[]>(`/usuarios/${iduser}/turnos`, { params: { anio, mes } }).then((r) => r.data),
   guardarTurnosMes: (iduser: string, anio: number, mes: number, items: { idsucursal: number; fecha: string }[]) =>
     api.post(`/usuarios/${iduser}/turnos`, { anio, mes, items }).then((r) => r.data),
-  listarInactivos: (params: { dias?: number; idperfil?: number } = {}) =>
+  listarInactivos: (params: { dias?: number; diasPorCaducar?: number; idperfil?: number } = {}) =>
     api.get<InactividadResp>('/usuarios/inactividad', { params }).then((r) => r.data),
   inhabilitarUno: (iduser: string) =>
     api.post('/usuarios/inactividad/inhabilitar', { iduser }).then((r) => r.data),
@@ -119,16 +119,23 @@ export type ImportarResult = {
   archivoErrores?:  string;
 };
 
+export type MotivoIncidencia = 'caducado' | 'inactividad' | 'por_caducar';
 export type InactivoRow = {
   iduser: string;
   nombre: string;
   apellido: string;
   idtipo_usuario: number;
-  ultimaFecha: string;  // YYYY-MM-DD
-  diasInactivo: number;
+  motivo: MotivoIncidencia;
+  /** Inactividad (solo si aplica) */
+  ultimaFecha?: string;  // YYYY-MM-DD
+  diasInactivo?: number;
+  /** Vigencia (solo si aplica) */
+  hastaVigencia?: string; // YYYY-MM-DD
+  diasParaCaducar?: number; // negativo si ya caducó
 };
 export type InactividadResp = {
-  dias: number;
+  diasInactividad: number;
+  diasPorCaducar: number;
   total: number;
   rows: InactivoRow[];
 };
@@ -277,6 +284,8 @@ export type Rol = {
   master?: number;
   edicion_rol?: number;
   menu_count?: number;
+  /** Cantidad de ítems de menu_general con permiso=1 (permisos realmente activos) */
+  permisos_activos?: number;
 };
 
 export type RolUsuario = {
@@ -401,6 +410,7 @@ export type Configuracion = {
   autorizado:    string | null;
   contabilidad:    number | null;
   talento_humano:  number | null;
+  crear_sin_rol:   number | null;
   metadata_ejecutado?: number | null;
 };
 
@@ -424,6 +434,8 @@ export type MetadataResultado = {
     permisos_pdv:       number;
     tipo_usuario:       number;
     tipo_operacion:     number;
+    /** Usuarios heredados sin rol (idtipo_usuario NULL) normalizados a -1 "Sin Asignación" */
+    usuarios_sin_rol?:  number;
   };
 };
 
@@ -435,6 +447,7 @@ export type ConfigFlags = {
   contabilidad:   boolean;
   talento_humano: boolean;
   complementario: boolean;
+  crear_sin_rol:  boolean;
 };
 
 // ── Reportes ─────────────────────────────────────────────────────────────

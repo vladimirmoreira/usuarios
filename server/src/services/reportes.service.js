@@ -56,7 +56,8 @@ async function expandDepositos(usDeps) {
 /** Descripción del perfil a partir de idtipo_usuario. */
 async function descripcionPerfil(idtipo_usuario) {
   if (idtipo_usuario == null) return null;
-  if (Number(idtipo_usuario) === 0) return 'Admin (Superusuario)';
+  // idtipo_usuario = 0 corresponde a usuarios creados "Sin Rol" (Admin real tiene NULL).
+  if (Number(idtipo_usuario) === 0) return 'Sin Rol';
   const rows = await query(
     'system',
     `SELECT FIRST 1 CAST(descripcion AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion FROM tipo_usuario WHERE idtipo_usuario = ?`,
@@ -74,12 +75,12 @@ async function vinculoLegajo(documento, iduser) {
       `SELECT FIRST 1 p.idpersona,
               CAST(p.nombre AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
               CAST(p.apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
-              p.nrodocumento,
-              c.idcargo, c.iduser_system, c.estado AS cargo_estado
+              p.documento AS nrodocumento,
+              c.idcargo, c.user_system AS iduser_system, c.estado AS cargo_estado
          FROM rh_persona p
          LEFT JOIN rh_cargo c ON c.idpersona = p.idpersona
-        WHERE (? IS NOT NULL AND p.nrodocumento = ?)
-           OR (? IS NOT NULL AND UPPER(TRIM(c.iduser_system)) = UPPER(TRIM(?)))
+        WHERE (? IS NOT NULL AND p.documento = ?)
+           OR (? IS NOT NULL AND UPPER(TRIM(c.user_system)) = UPPER(TRIM(?)))
         ORDER BY c.estado DESC, c.idcargo DESC`,
       [documento, documento, iduser, iduser],
     );

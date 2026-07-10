@@ -9,14 +9,15 @@ const rptDe = (req) => req.user?.iduser || 'SYSTEM';
 const MAX_BATCH = 100;
 
 const InactividadController = {
-  /** GET /api/usuarios/inactividad?dias=&idperfil= */
+  /** GET /api/usuarios/inactividad?dias=&diasPorCaducar=&idperfil=
+   *  Vista unificada de incidencias (inactividad + caducados + próximos a caducar). */
   async listar(req, res, next) {
     try {
-      const dias = req.query.dias != null ? Number(req.query.dias) : null;
-      const idperfilFiltro = req.query.idperfil != null
-        ? Number(req.query.idperfil) : null;
-      const { dias: usado, rows } = await InactividadModel.listar(dias, { idperfilFiltro });
-      res.json({ dias: usado, total: rows.length, rows });
+      const diasInactividad = req.query.dias != null ? Number(req.query.dias) : null;
+      const diasPorCaducar = req.query.diasPorCaducar != null ? Number(req.query.diasPorCaducar) : 30;
+      const idperfilFiltro = req.query.idperfil != null ? Number(req.query.idperfil) : null;
+      const out = await InactividadModel.listarIncidencias({ diasInactividad, diasPorCaducar, idperfilFiltro });
+      res.json({ ...out, total: out.rows.length });
     } catch (e) { next(e); }
   },
 
@@ -46,10 +47,14 @@ const InactividadController = {
         return res.status(400).json({ error: `El lote no puede superar ${MAX_BATCH} usuarios` });
       }
 
-      // Re-validar inactividad (defensa en profundidad: alguien podría
-      // haber registrado actividad entre la verificación y el envío).
-      const { rows: candidatos } = await InactividadModel.listar(dias);
-      const validos = new Set(candidatos.map((c) => c.iduser.toUpperCase()));
+      // Re-validar incidencias (defensa en profundidad: alguien podría haber
+      // registrado actividad o extendido la vigencia entre la verificación y el envío).
+      // Solo son accionables (inhabilitables) los caducados y los inactivos; los
+      // "por_caducar" todavía no vencieron y no se pueden inhabilitar en lote.
+      const { rows: candidatos } = await InactividadModel.listarIncidencias({ diasInactividad: dias });
+      const validos = new Set(
+        candidatos.filter((c) => c.motivo !== 'por_caducar').map((c) => c.iduser.toUpperCase()),
+      );
       const aProcesar = idsIn.filter((u) =>
         validos.has(String(u).trim().toUpperCase()));
 

@@ -56,7 +56,7 @@ export default function AppLayout() {
               }`
             }
           >
-            <UserMinus className="h-4 w-4" /> Inactividad
+            <UserMinus className="h-4 w-4" /> Incidencias
           </NavLink>
           <NavLink
             to="/roles"

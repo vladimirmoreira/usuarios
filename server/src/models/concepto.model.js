@@ -14,9 +14,12 @@ const ConceptoModel = {
   listarTiposMovimiento: () =>
     query(
       'server',
+      // tipo < 0 (p.ej. -1) son movimientos sin clasificar/heredados que no
+      // corresponden a ninguna categoría real (0..16) y no deben aparecer como
+      // un grupo fantasma en la pestaña Movimientos → Conceptos.
       `SELECT idtipomovimiento, CAST(descripcion AS VARCHAR(120) CHARACTER SET OCTETS) AS descripcion, tipo
          FROM tipomovimiento
-        WHERE estado = 1
+        WHERE estado = 1 AND tipo >= 0
         ORDER BY tipo, descripcion`,
     ).then((r) => decodeRows(r, ['descripcion'])).catch(() => []),
 

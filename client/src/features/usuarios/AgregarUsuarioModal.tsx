@@ -13,8 +13,13 @@ const schema = z.object({
                .regex(/^[A-Za-z0-9_]+$/, 'Solo letras, números y guión bajo'),
   documento: z.string().min(1, 'Requerido').max(20, 'Máx. 20 caracteres')
                .regex(/^[0-9]+$/, 'Solo dígitos numéricos'),
-  idperfil:  z.number({ invalid_type_error: 'Seleccione un perfil' }).int().positive('Seleccione un perfil'),
-  idsucursal:z.number({ invalid_type_error: 'Seleccione una sucursal' }).int().positive('Seleccione una sucursal'),
+  // idperfil = 0 => "Sin Rol". En ese caso la sucursal es opcional.
+  idperfil:  z.number({ invalid_type_error: 'Seleccione un perfil' }).int().min(0, 'Seleccione un perfil'),
+  idsucursal:z.number().int().positive().optional(),
+}).superRefine((val, ctx) => {
+  if (val.idperfil !== 0 && !val.idsucursal) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['idsucursal'], message: 'Seleccione una sucursal' });
+  }
 });
 
 /* ── Tipos ─────────────────────────────────────────────────────────── */
@@ -25,7 +30,9 @@ type FormState = {
 type FormErrors = Partial<Record<keyof FormState, string>>;
 type AvailStatus = 'idle' | 'checking' | 'ok' | 'taken';
 
-const INITIAL: FormState = { nombre: '', apellido: '', iduser: '', documento: '', idperfil: '', idsucursal: '', hasta_vigencia: '' };
+// Vigencia por defecto: 31/12/2050 (sin caducidad efectiva). El operador puede acortarla.
+const VIGENCIA_DEFAULT = '2050-12-31';
+const INITIAL: FormState = { nombre: '', apellido: '', iduser: '', documento: '', idperfil: '', idsucursal: '', hasta_vigencia: VIGENCIA_DEFAULT };
 const MAX_FOTO = 2 * 1024 * 1024; // 2 MB
 
 /* ── Componente ────────────────────────────────────────────────────── */
@@ -193,12 +200,16 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
       apellido:   form.apellido.trim(),
       documento:  form.documento.trim(),
       idperfil:   Number(form.idperfil),
-      idsucursal: Number(form.idsucursal),
     };
+    // "Sin Rol" (idperfil=0) no lleva sucursal; se asigna luego en Accesos.
+    if (!sinRol && form.idsucursal !== '') payload.idsucursal = Number(form.idsucursal);
     if (fotoBase64) payload.foto = fotoBase64;
     if (form.hasta_vigencia) payload.hasta_vigencia = form.hasta_vigencia;
     mutation.mutate(payload);
   };
+
+  /* ── "Sin Rol" seleccionado (idperfil = 0) ───────────────────────── */
+  const sinRol = form.idperfil !== '' && Number(form.idperfil) === 0;
 
   /* ── Helpers de render ───────────────────────────────────────────── */
   const errCls = (f: keyof FormState) =>
@@ -344,12 +355,22 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
                   className={`input mt-1 ${errCls('idperfil')} ${docStatus === 'taken' ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
                   <option value="">Seleccionar…</option>
-                  {(perfilesQ.data || []).map((p: Rol) => {
-                    const inactivo = p.estado !== 1;
-                    const sinMenu  = (p.menu_count ?? 1) === 0;
-                    const disabled = inactivo || sinMenu;
-                    const label    = p.descripcion
-                      + (inactivo ? ' (Inactivo)' : sinMenu ? ' (Sin menú)' : '');
+                  {(perfilesQ.data || [])
+                    // idtipo_usuario=0 es la entrada sintética "Sin Rol"; se oculta si la
+                    // configuración lo deshabilita (crear_sin_rol=0). El -1 ("Sin Asignación")
+                    // nunca se ofrece al crear (es un estado legado, no elegible).
+                    .filter((p: Rol) => p.idtipo_usuario !== -1)
+                    .filter((p: Rol) => p.idtipo_usuario !== 0 || flagsQ.data?.crear_sin_rol)
+                    .map((p: Rol) => {
+                    const esSinRol    = p.idtipo_usuario === 0;
+                    const inactivo    = p.estado !== 1;
+                    // Un rol solo es asignable si tiene al menos un permiso de menú activo.
+                    // Un rol recién creado tiene menu_general copiado pero todo en permiso=0.
+                    const sinPermisos = (p.permisos_activos ?? 1) === 0;
+                    const disabled = !esSinRol && (inactivo || sinPermisos);
+                    const label    = esSinRol
+                      ? 'Sin Rol'
+                      : p.descripcion + (inactivo ? ' (Inactivo)' : sinPermisos ? ' (Sin permisos)' : '');
                     return (
                       <option key={p.idtipo_usuario} value={p.idtipo_usuario} disabled={disabled}>
                         {label}
@@ -360,28 +381,32 @@ export default function AgregarUsuarioModal({ onClose }: { onClose: () => void }
                 {errors.idperfil && <p className="mt-0.5 text-xs text-rose-600">{errors.idperfil}</p>}
               </div>
 
-              {/* Sucursal */}
+              {/* Sucursal — opcional cuando el perfil es "Sin Rol" */}
               <div>
-                <label className={`label ${docStatus === 'taken' ? 'opacity-40' : ''}`}>Sucursal <span className="text-rose-500">*</span></label>
+                <label className={`label ${docStatus === 'taken' ? 'opacity-40' : ''}`}>
+                  Sucursal {!sinRol && <span className="text-rose-500">*</span>}
+                </label>
                 <select
-                  value={form.idsucursal}
+                  value={sinRol ? '' : form.idsucursal}
                   onChange={setField('idsucursal')}
-                  disabled={docStatus === 'taken'}
-                  className={`input mt-1 ${errCls('idsucursal')} ${docStatus === 'taken' ? 'cursor-not-allowed opacity-40' : ''}`}
+                  disabled={docStatus === 'taken' || sinRol}
+                  className={`input mt-1 ${errCls('idsucursal')} ${(docStatus === 'taken' || sinRol) ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
                   <option value="">Seleccionar…</option>
                   {(sucursalesQ.data || []).map((s: any) => (
                     <option key={s.idsucursal} value={s.idsucursal}>{s.nombre}</option>
                   ))}
                 </select>
-                {errors.idsucursal && <p className="mt-0.5 text-xs text-rose-600">{errors.idsucursal}</p>}
+                {sinRol
+                  ? <p className="mt-0.5 text-xs text-slate-400">Se configura luego en Accesos</p>
+                  : errors.idsucursal && <p className="mt-0.5 text-xs text-rose-600">{errors.idsucursal}</p>}
               </div>
 
               {/* Vigencia hasta (opcional) */}
               <div>
                 <label className="label">Vigencia hasta</label>
                 <input type="date" value={form.hasta_vigencia} onChange={setField('hasta_vigencia')} className="input mt-1" />
-                <p className="mt-0.5 text-xs text-slate-400">Opcional — caduca el acceso</p>
+                <p className="mt-0.5 text-xs text-slate-400">Al llegar la fecha, el usuario pasa a Inactivo. Por defecto 31/12/2050.</p>
               </div>
 
             </div>

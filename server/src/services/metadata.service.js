@@ -7,7 +7,8 @@
  * con los catálogos base necesarios para el funcionamiento del módulo Usuarios.
  *
  * Tablas afectadas:
- *   - system: TMP$USUARIO_PERMISOS_GENERALES, TMP$USUARIO_PERMISOS_PDV, TIPO_USUARIO
+ *   - system: TMP$USUARIO_PERMISOS_GENERALES, TMP$USUARIO_PERMISOS_PDV,
+ *             TMP$USUARIO_PERMISOS_CONCEPTOS, TIPO_USUARIO
  *   - server: TIPO_OPERACION
  *
  * El campo CONFIGURACION_USUARIO.METADATA_EJECUTADO actúa como cerrojo:
@@ -86,6 +87,29 @@ const PERMISOS_PDV = [
 ];
 
 /**
+ * [idpermiso_concepto, descripcion]
+ * Catálogo de permisos de acción por concepto (USUARIO_CONCEPTO.PERMISO_VARIOS,
+ * cadena posicional de 15 caracteres → índices 0..14).
+ */
+const PERMISOS_CONCEPTOS = [
+  [0,  'Detalle de Comprobante Directo'],
+  [1,  'Activar Permisos'],
+  [2,  'Agregar'],
+  [3,  'Modificar'],
+  [4,  'Eliminar'],
+  [5,  'Anular'],
+  [6,  'Imprimir'],
+  [7,  'Estado'],
+  [8,  'Menu PopUp'],
+  [9,  'Autorizar/Rechazar Pedido'],
+  [10, 'Informes'],
+  [11, 'Registradora'],
+  [12, 'Emitir Pagares'],
+  [13, 'Generar Facturas'],
+  [14, 'Preparar Pedidos'],
+];
+
+/**
  * [idtipo_usuario, descripcion, iduser, tipo, estado, master, edicion_rol]
  * Solo se insertan registros que no existan (UPDATE OR INSERT MATCHING pk).
  */
@@ -161,6 +185,16 @@ async function seedPermisosPdv(tx) {
   }
 }
 
+async function seedPermisosConceptos(tx) {
+  await tx.query('DELETE FROM TMP$USUARIO_PERMISOS_CONCEPTOS');
+  for (const [idpermiso_concepto, descripcion] of PERMISOS_CONCEPTOS) {
+    await tx.query(
+      'INSERT INTO TMP$USUARIO_PERMISOS_CONCEPTOS (idpermiso_concepto, descripcion) VALUES (?, ?)',
+      [idpermiso_concepto, descripcion],
+    );
+  }
+}
+
 async function seedTipoUsuario(tx) {
   // UPDATE OR INSERT: si ya existe el rol, actualiza; si no, crea.
   for (const [id, desc, iduser, tipo, estado, master, edicion_rol] of TIPO_USUARIO) {
@@ -182,6 +216,16 @@ async function seedTipoOperacion(tx) {
       [id, descripcion],
     );
   }
+}
+
+/**
+ * Habilita todos los tipos de movimiento existentes (estado = 1).
+ * El campo ESTADO se agrega en migrarDDL(); las filas preexistentes quedan
+ * en NULL, por lo que aquí se ponen en 1 para que aparezcan en la pestaña
+ * Movimientos (AccesosService.obtenerConceptos filtra por estado = 1).
+ */
+async function seedTipoMovimiento(tx) {
+  await tx.query('UPDATE tipomovimiento SET estado = 1 WHERE estado IS NULL');
 }
 
 // ── Ejecución principal ───────────────────────────────────────────────────────
@@ -288,6 +332,11 @@ async function migrarDDL() {
     // Faltaba en la lista de ALTER (solo estaba en el CREATE), por eso no se agregaba en BD ya existentes.
     `ALTER TABLE configuracion_usuario ADD AUTORIZADO VARCHAR(10)`,
     `ALTER TABLE configuracion_usuario ADD MAIL_RESETCLAVE SMALLINT DEFAULT 0`,
+    // CREAR_SIN_ROL: 1 = habilita la opción "Sin Rol" en el desplegable de Perfil al crear usuarios.
+    `ALTER TABLE configuracion_usuario ADD CREAR_SIN_ROL SMALLINT DEFAULT 1`,
+    // TIPOMOVIMIENTO: campo ESTADO requerido por obtenerConceptos (WHERE estado = 1).
+    // Si la tabla ya existía sin la columna, se agrega con default 1.
+    `ALTER TABLE tipomovimiento ADD ESTADO SMALLINT DEFAULT 1`,
   ];
 
   const runDDL = (scope, statements) =>
@@ -336,8 +385,11 @@ async function ejecutar() {
   const detalle = {
     permisos_generales: 0,
     permisos_pdv: 0,
+    permisos_conceptos: 0,
     tipo_usuario: 0,
     tipo_operacion: 0,
+    tipo_movimiento: 0,
+    usuarios_sin_rol: 0,
   };
 
   // 3. Seed BD system
@@ -348,14 +400,60 @@ async function ejecutar() {
     await seedPermisosPdv(tx);
     detalle.permisos_pdv = PERMISOS_PDV.length;
 
+    await seedPermisosConceptos(tx);
+    detalle.permisos_conceptos = PERMISOS_CONCEPTOS.length;
+
     await seedTipoUsuario(tx);
     detalle.tipo_usuario = TIPO_USUARIO.length;
+
+    // Normalizar usuarios heredados sin rol: idtipo_usuario NULL → -1 ("Sin Asignación"),
+    // excepto Admin (que se mantiene en NULL como superusuario). Esto evita perfiles en
+    // blanco y potenciales conflictos con la lógica de roles. Los usuarios en -1 quedan
+    // fuera de la grilla y reportes (COALESCE(idtipo_usuario,0) <> -1), igual que las
+    // plantillas de rol. No afecta a los usuarios "Sin Rol" deliberados (idtipo_usuario = 0).
+    // Se asegura primero que exista la fila -1 sin pisar su descripción si ya está.
+    const existeSinAsig = await tx.query(
+      `SELECT FIRST 1 idtipo_usuario FROM tipo_usuario WHERE idtipo_usuario = -1`,
+    );
+    if (!existeSinAsig.length) {
+      await tx.query(
+        `INSERT INTO tipo_usuario (idtipo_usuario, descripcion, iduser, tipo, estado, master, edicion_rol)
+         VALUES (-1, 'Sin Asignacion', NULL, 0, 1, 0, 0)`,
+      );
+    }
+    const pend = await tx.query(
+      `SELECT COUNT(*) AS n FROM usuario WHERE idtipo_usuario IS NULL AND UPPER(TRIM(iduser)) <> 'ADMIN'`,
+    );
+    await tx.query(
+      `UPDATE usuario SET idtipo_usuario = -1
+        WHERE idtipo_usuario IS NULL AND UPPER(TRIM(iduser)) <> 'ADMIN'`,
+    );
+    detalle.usuarios_sin_rol = Number(pend[0]?.n) || 0;
+
+    // Vigencia (HASTA_VIGENCIA) por defecto para usuarios legados que no la tienen (NULL):
+    //   - Activos (1) / Bloqueados (2) → 31/12/2050 (sin caducidad efectiva).
+    //   - Inactivos (0)                → fecha actual (ya vencidos).
+    // No pisa fechas ya cargadas por el operador. Excluye Admin y plantillas de rol.
+    const noReservado = `UPPER(TRIM(iduser)) <> 'ADMIN'
+       AND iduser NOT IN (SELECT iduser FROM tipo_usuario WHERE iduser IS NOT NULL)`;
+    await tx.query(
+      `UPDATE usuario SET hasta_vigencia = CAST('2050-12-31' AS TIMESTAMP)
+        WHERE hasta_vigencia IS NULL AND COALESCE(estado,0) IN (1, 2) AND ${noReservado}`,
+    );
+    await tx.query(
+      `UPDATE usuario SET hasta_vigencia = CURRENT_TIMESTAMP
+        WHERE hasta_vigencia IS NULL AND COALESCE(estado,0) = 0 AND ${noReservado}`,
+    );
   });
 
   // 4. Seed BD server + marcar como ejecutado
   await transaction('server', async (tx) => {
     await seedTipoOperacion(tx);
     detalle.tipo_operacion = TIPO_OPERACION.length;
+
+    // Habilitar tipos de movimiento (estado = 1) para que aparezcan los conceptos
+    await seedTipoMovimiento(tx);
+    detalle.tipo_movimiento = 1;
 
     // Marcar METADATA_EJECUTADO = 1 en todas las filas
     await tx.query('UPDATE configuracion_usuario SET metadata_ejecutado = 1');

@@ -25,6 +25,8 @@ export default function UsuariosPage() {
   const [bulkBusy, setBulkBusy]             = useState(false);
   const [showBulkSucursal, setShowBulkSucursal] = useState(false);
   const [barPos, setBarPos] = useState<{ x: number; y: number } | null>(null);
+  // Filas actualmente visibles en la grilla (filtradas + ordenadas) para exportar solo lo filtrado
+  const visibleRowsRef = useRef<Usuario[]>([]);
   const barRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const hoverBarRef = useRef(false);
@@ -68,7 +70,15 @@ export default function UsuariosPage() {
   });
 
   const perfilesMap = useMemo<Record<number, string>>(
-    () => Object.fromEntries((perfilesQ.data ?? []).map((p: any) => [p.idtipo_usuario, p.descripcion])),
+    () => {
+      const m = Object.fromEntries((perfilesQ.data ?? []).map((p: any) => [p.idtipo_usuario, p.descripcion]));
+      // idtipo_usuario = 0 en usuarios reales = "Sin Rol" (el Admin real tiene idtipo_usuario NULL
+      // y queda excluido de la grilla, así que el 0 sintético "Administrador" no aplica aquí).
+      m[0] = 'Sin Rol';
+      // idtipo_usuario = -1 = "Sin Asignación" (usuarios legados pendientes de asignar perfil).
+      m[-1] = 'Sin Asignación';
+      return m;
+    },
     [perfilesQ.data],
   );
 
@@ -76,6 +86,35 @@ export default function UsuariosPage() {
     () => new Set((perfilesQ.data ?? []).filter((p: any) => Number(p.master) === 1).map((p: any) => p.idtipo_usuario)),
     [perfilesQ.data],
   );
+
+  // Exporta a CSV solo las filas actualmente visibles (respeta filtros y orden de la grilla)
+  const exportarFiltrados = () => {
+    const rows = visibleRowsRef.current;
+    if (!rows.length) { toast.error('No hay registros para exportar'); return; }
+    const ESTADO: Record<number, string> = { 0: 'Inactivo', 1: 'Activo', 2: 'Bloqueado' };
+    const headers = ['Usuario', 'Nombre', 'Apellido', 'Sucursal', 'Documento', 'Perfil', 'Estado'];
+    const esc = (v: unknown) => {
+      if (v == null) return '';
+      const s = String(v);
+      return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(';')];
+    for (const u of rows) {
+      lines.push([
+        u.iduser, u.nombre, u.apellido, u.sucursal_nombre || '-',
+        u.documento, perfilesMap[u.idtipo_usuario] || '-', ESTADO[u.estado] ?? u.estado,
+      ].map(esc).join(';'));
+    }
+    // BOM UTF-8 + CRLF para compatibilidad con Excel
+    const csv = '﻿' + lines.join('\r\n') + '\r\n';
+    const stamp = new Date().toISOString().slice(0, 10);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `usuarios_${stamp}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success(`CSV generado (${rows.length} registro${rows.length !== 1 ? 's' : ''})`);
+  };
 
   // Al montar: bloquear activos sin menús (estado 1 → 2)
   useEffect(() => {
@@ -178,10 +217,7 @@ export default function UsuariosPage() {
         <button className="btn-outline" onClick={() => setShowImportar(true)}>
           <Upload className="h-4 w-4" /> Importar
         </button>
-        <button className="btn-outline" onClick={async () => {
-          try { await UsuariosAPI.exportCsv(); toast.success('CSV generado'); }
-          catch (e: any) { toast.error(e?.response?.data?.error || 'Error al exportar'); }
-        }}>
+        <button className="btn-outline" onClick={exportarFiltrados} title="Exporta solo los registros visibles según los filtros aplicados">
           <Download className="h-4 w-4" /> Exportar CSV
         </button>
         <button
@@ -211,6 +247,7 @@ export default function UsuariosPage() {
         selectedIds={selectedIds}
         onToggleSelected={toggleSelected}
         onToggleAllSelected={toggleAllSelected}
+        onVisibleRowsChange={(rows) => { visibleRowsRef.current = rows; }}
       />
       {showAgregar && <AgregarUsuarioModal onClose={() => { setShowAgregar(false); usuariosQ.refetch(); }} />}
       {resetFor && <ResetClaveModal iduser={resetFor} onClose={() => setResetFor(null)} />}

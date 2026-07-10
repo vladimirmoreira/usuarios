@@ -1,5 +1,5 @@
 import type { FichaRol } from '../../api/endpoints';
-import { Header, Seccion, DL, DT, DD, Chips, Badge, Vacio, ConceptosTable } from './FichaUsuarioReporte';
+import { Header, Seccion, DL, DT, DD, Chips, Badge, Vacio, ConceptosTable, ChecklistPermisos } from './FichaUsuarioReporte';
 
 export default function FichaRolReporte({ data }: { data: FichaRol }) {
   const r = data.rol;
@@ -17,6 +17,7 @@ export default function FichaRolReporte({ data }: { data: FichaRol }) {
     .map((v, i) => (v ? `Mov ${i}` : null))
     .filter(Boolean) as string[];
   const menuHab = (data.accesos.menu || []).filter((m) => m.permiso === 1);
+  const permCatalogo = data.accesos.permisosGenerales.catalogo || [];
 
   return (
     <div className="p-5 text-sm text-zinc-800 dark:text-zinc-100">
@@ -47,8 +48,8 @@ export default function FichaRolReporte({ data }: { data: FichaRol }) {
         </DL>
       </Seccion>
 
-      <Seccion titulo={`Permisos generales (${permActivos.length} activos)`}>
-        {permActivos.length === 0 ? <Vacio>Ninguno.</Vacio> : <Chips items={permActivos} />}
+      <Seccion titulo={`Permisos generales (${permActivos.length} de ${permCatalogo.length} activos)`}>
+        <ChecklistPermisos catalogo={permCatalogo} flags={data.accesos.permisosGenerales.flags || []} />
       </Seccion>
 
       <Seccion titulo={`Movimientos (${movActivos.length} activos)`}>
@@ -76,7 +77,7 @@ export default function FichaRolReporte({ data }: { data: FichaRol }) {
       </Seccion>
 
       <Seccion titulo="Conceptos por tipo de movimiento">
-        <ConceptosTable data={data.conceptos} />
+        <ConceptosTable data={data.conceptos} mostrarTodos />
       </Seccion>
 
       <Seccion titulo={`Usuarios asignados al rol (${data.usuariosAsignados.length})`}>
