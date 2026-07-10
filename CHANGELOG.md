@@ -7,6 +7,22 @@ y las fechas están en formato `AAAA-MM-DD` (zona `America/Asuncion`).
 
 ---
 
+## [No publicado] — 2026-07-10 (b)
+
+### Agregado — Catálogos TMP$ de la BD master (Contab./RRHH)
+
+- Se **crearon y sembraron** `TMP$USUARIO_PERMISOS_MASTER` (9 permisos) y
+  `TMP$USUARIO_MENU_MASTER` (19 ítems) en la BD **master** (`orgonita_master`), que
+  hasta ahora no existían — el panel Contab./RRHH venía funcionando solo con el
+  fallback hardcodeado. Ahora el catálogo se lee de la BD y desaparece el ruido de
+  log `-204 Table unknown` al abrir el panel.
+- La creación + seed se agregó a `MetadataService.migrarDDL()` (bloque **master**,
+  guardado por `MASTER_HOST`/`MASTER_DATABASE`; idempotente) para instalaciones
+  nuevas. Se mantiene el fallback de `catalogo.model.js` como respaldo.
+- **Charset:** los títulos se siembran en **ASCII** (p. ej. "Liquidacion de
+  Salarios" sin acento) para evitar *mojibake* al escribir en la BD `CHARACTER SET
+  NONE` (ver §5.12). El fallback se alineó a la misma forma ASCII.
+
 ## [No publicado] — 2026-07-10
 
 ### Cambiado — Menú "Inactividad" → "Incidencias" (vista unificada)

@@ -36,7 +36,7 @@ const MENU_MASTER_FALLBACK = [
   { posicion: 10, titulo: 'Plan de Cuentas',         modulo: 1 },
   { posicion: 11, titulo: 'Definiciones',            modulo: 1 },
   { posicion: 12, titulo: 'Propiedades',             modulo: 1 },
-  { posicion: 13, titulo: 'Liquidación de Salarios', modulo: 2 },
+  { posicion: 13, titulo: 'Liquidacion de Salarios', modulo: 2 },
   { posicion: 14, titulo: 'Movimientos',             modulo: 2 },
   { posicion: 15, titulo: 'Control de Acceso',       modulo: 2 },
   { posicion: 16, titulo: 'Planilla Seguro Social',  modulo: 2 },

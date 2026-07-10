@@ -368,6 +368,40 @@ async function migrarDDL() {
 
   await runDDL('system', ddlSystem);
   await runDDL('server', ddlServer);
+
+  // BD master (opcional): catálogos TMP$ del panel Contab./RRHH. Solo si el pool
+  // master está configurado. Títulos en ASCII (sin acentos) para evitar mojibake
+  // al escribir en BD CHARACTER SET NONE (ver §5.12). Idempotente (runDDL ignora
+  // "already exists" / "duplicate"). Mientras no existan, el código usa el fallback
+  // hardcodeado de catalogo.model.js.
+  if (process.env.MASTER_HOST && process.env.MASTER_DATABASE) {
+    const PERM_MASTER = [
+      [1, 'Agregar', 'GENERAL'], [2, 'Modificar', 'GENERAL'], [3, 'Eliminar', 'GENERAL'],
+      [4, 'Imprimir', 'GENERAL'], [5, 'Administrador', 'ADMIN'], [6, 'Conf. Reportes', 'ADMIN'],
+      [7, 'RRHH Grupos', 'RRHH'], [8, 'RRHH Supervisor', 'RRHH'], [9, 'RRHH Areas', 'RRHH'],
+    ];
+    const MENU_MASTER = [
+      [1, 'Diario', 1], [2, 'Mayor', 1], [3, 'Libro Fiscal', 1], [4, 'Inventario Activo Fijo', 1],
+      [5, 'Procesos', 1], [6, 'Sumas y Saldos', 1], [7, 'Estados de Resultados', 1], [8, 'General', 1],
+      [9, 'Impositivo', 1], [10, 'Plan de Cuentas', 1], [11, 'Definiciones', 1], [12, 'Propiedades', 1],
+      [13, 'Liquidacion de Salarios', 2], [14, 'Movimientos', 2], [15, 'Control de Acceso', 2],
+      [16, 'Planilla Seguro Social', 2], [17, 'Libro Laboral', 2], [18, 'Legajo del Personal', 2],
+      [19, 'Propiedades', 2],
+    ];
+    const ddlMaster = [
+      `CREATE TABLE TMP$USUARIO_PERMISOS_MASTER (
+         POSICION INTEGER NOT NULL, TITULO VARCHAR(60) NOT NULL, GRUPO VARCHAR(20) NOT NULL,
+         CONSTRAINT PK_TMP_PERM_MASTER PRIMARY KEY (POSICION))`,
+      ...PERM_MASTER.map(([p, t, g]) =>
+        `INSERT INTO TMP$USUARIO_PERMISOS_MASTER (POSICION, TITULO, GRUPO) VALUES (${p}, '${t}', '${g}')`),
+      `CREATE TABLE TMP$USUARIO_MENU_MASTER (
+         POSICION INTEGER NOT NULL, TITULO VARCHAR(60) NOT NULL, MODULO INTEGER NOT NULL,
+         CONSTRAINT PK_TMP_MENU_MASTER PRIMARY KEY (POSICION))`,
+      ...MENU_MASTER.map(([p, t, m]) =>
+        `INSERT INTO TMP$USUARIO_MENU_MASTER (POSICION, TITULO, MODULO) VALUES (${p}, '${t}', ${m})`),
+    ];
+    await runDDL('master', ddlMaster);
+  }
 }
 
 async function ejecutar() {
