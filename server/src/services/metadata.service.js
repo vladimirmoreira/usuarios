@@ -274,9 +274,13 @@ async function migrarDDL() {
     `ALTER TABLE usuario ADD documento          VARCHAR(20)`,
     `ALTER TABLE usuario ADD exclusion_permisos INTEGER  DEFAULT 0`,
     `ALTER TABLE usuario ADD hasta_vigencia     TIMESTAMP`,
-    // EMPRESAS.ACCESIBLE: 1 = empresa elegible en el combo de login multi-empresa
-    // (NULL se trata como accesible). Marcá 0 las de prueba/backup.
-    `ALTER TABLE empresas ADD accesible SMALLINT DEFAULT 1`,
+    // EMPRESAS.ACCESIBLE: 1 = empresa elegible en el login multi-empresa. Estricto:
+    // NULL/0 = NO accesible. Marcá 1 en las empresas donde el módulo debe entrar.
+    `ALTER TABLE empresas ADD accesible SMALLINT DEFAULT 0`,
+    // Bootstrap: empresa 1 (base) accesible, para que la instalación nueva no quede
+    // sin ninguna empresa logueable. No pisa valores ya cargados (solo NULL).
+    `UPDATE empresas SET accesible = 1
+       WHERE CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = '1' AND accesible IS NULL`,
   ];
 
   // BD server: tablas que deben existir + columnas adicionales

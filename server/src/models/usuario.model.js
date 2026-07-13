@@ -56,7 +56,7 @@ const UsuarioModel = {
   /**
    * Empresas a las que el usuario PUEDE ingresar en este módulo:
    *   - tiene fila en USUARIOEMPRESA para esa empresa,
-   *   - la empresa está marcada accesible (EMPRESAS.ACCESIBLE = 1; NULL = accesible),
+   *   - la empresa está marcada accesible (EMPRESAS.ACCESIBLE = 1; NULL/0 = NO accesible),
    *   - y tiene el gate del módulo (menu_general 'mnuArchivoPanelControl' permiso=1
    *     para esa empresa).
    * Devuelve [{ idempresa, nombre }] ordenado por idempresa numérica.
@@ -72,7 +72,7 @@ const UsuarioModel = {
          JOIN empresas e
            ON CAST(TRIM(e.idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(TRIM(ue.idempresa) AS VARCHAR(2) CHARACTER SET OCTETS)
         WHERE CAST(UPPER(TRIM(ue.iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)
-          AND COALESCE(e.accesible, 1) = 1
+          AND COALESCE(e.accesible, 0) = 1
           AND EXISTS (
                 SELECT 1 FROM menu_general mg
                  WHERE CAST(UPPER(TRIM(mg.iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)

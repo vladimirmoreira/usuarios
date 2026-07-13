@@ -181,7 +181,7 @@ const CatalogoModel = {
   // ── Empresas (para el apartado de Configuración) ────────────────────────
   // SYSTEM: EMPRESAS (con ACCESIBLE = elegible en el combo de login).
   empresasSystem: () =>
-    query('system', `SELECT ${O('idempresa', 'idempresa', 2)}, ${O('nombre', 'nombre', 80)}, COALESCE(accesible, 1) AS accesible
+    query('system', `SELECT ${O('idempresa', 'idempresa', 2)}, ${O('nombre', 'nombre', 80)}, COALESCE(accesible, 0) AS accesible
          FROM empresas ORDER BY idempresa`)
       .then((r) => decodeRows(r, ['idempresa', 'nombre']).map((x) => ({
         idempresa: String(x.idempresa).trim(), nombre: (x.nombre || '').trim(), accesible: Number(x.accesible),

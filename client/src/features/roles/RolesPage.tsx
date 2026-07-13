@@ -255,13 +255,13 @@ export default function RolesPage() {
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-xl rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3">
               <h3 className="text-base font-semibold text-zinc-800">
                 {modal === 'crear' ? 'Nuevo rol' : `Editar: ${editando?.descripcion}`}
               </h3>
               <button onClick={cerrar} className="btn-ghost"><X className="h-4 w-4" /></button>
             </div>
-            <div className="max-h-[88vh] space-y-3 overflow-y-auto px-6 py-4">
+            <div className="max-h-[82vh] space-y-2 overflow-y-auto px-6 py-3">
               {modal === 'editar' && (
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -348,7 +348,7 @@ export default function RolesPage() {
                 )}
               </label>
               {form.usuario_pdv === 1 && (
-                <div className="ml-6 space-y-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-3">
+                <div className="ml-6 space-y-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
                   <div>
                     <label className="label">Sucursal (local)</label>
                     <select
@@ -391,7 +391,7 @@ export default function RolesPage() {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-2 border-t border-zinc-200 px-6 py-4">
+            <div className="flex justify-end gap-2 border-t border-zinc-200 px-6 py-3">
               <button className="btn-outline" onClick={cerrar} disabled={busy}>Cancelar</button>
               <button className="btn-primary" onClick={onGuardar} disabled={busy}>
                 {busy ? 'Guardando…' : 'Guardar'}

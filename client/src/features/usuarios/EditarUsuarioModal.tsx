@@ -219,18 +219,17 @@ export default function EditarUsuarioModal({
         </div>
 
         <form onSubmit={onSubmit} noValidate>
-          <div className="max-h-[88vh] space-y-3 overflow-y-auto px-6 py-4">
+          <div className="max-h-[82vh] space-y-2 overflow-y-auto px-6 py-3">
 
             {/* Usuario — solo lectura */}
             <div>
               <label className="label">Usuario</label>
-              <div className="mt-1 flex h-9 items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold tracking-wide text-zinc-700">
+              <div className="mt-1 flex h-8 items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold tracking-wide text-zinc-700">
                 {usuario.iduser}
               </div>
-              <p className="mt-0.5 text-xs text-slate-400">El identificador de usuario no puede modificarse</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
 
               {/* Nombre */}
               <div>
@@ -378,7 +377,7 @@ export default function EditarUsuarioModal({
             <button
               type="button"
               onClick={toggleComplemento}
-              className="flex w-full items-center justify-between px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="flex w-full items-center justify-between px-6 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               <span>Complementario</span>
               {compLoading
@@ -432,7 +431,7 @@ export default function EditarUsuarioModal({
           </div>
 
           {/* Pie */}
-          <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+          <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-3">
             <button type="button" onClick={onClose} className="btn-outline" disabled={mutation.isPending}>
               Cancelar
             </button>

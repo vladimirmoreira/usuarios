@@ -246,7 +246,7 @@ const OperacionesService = {
     // Destino: debe existir y estar accesible=1
     const empRows = await query(
       'system',
-      `SELECT FIRST 1 COALESCE(accesible,1) AS acc
+      `SELECT FIRST 1 COALESCE(accesible,0) AS acc
          FROM empresas
         WHERE CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
       [dst],
