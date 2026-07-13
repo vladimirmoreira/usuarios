@@ -17,8 +17,13 @@ const Ctx = createContext<AuthCtx>({} as AuthCtx);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('accessToken'));
   const [user, setUser] = useState<UserInfo>(() => {
-    const u = localStorage.getItem('userInfo');
-    return u ? JSON.parse(u) : null;
+    // Tolerar basura en localStorage ('undefined', JSON inválido) sin romper la app.
+    try {
+      const u = localStorage.getItem('userInfo');
+      return u && u !== 'undefined' && u !== 'null' ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
   });
 
   useEffect(() => {
@@ -36,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(u);
           localStorage.setItem('accessToken', t);
           localStorage.setItem('refreshToken', r);
-          localStorage.setItem('userInfo', JSON.stringify(u));
+          localStorage.setItem('userInfo', JSON.stringify(u ?? null));
         },
         logout: () => {
           setToken(null);
