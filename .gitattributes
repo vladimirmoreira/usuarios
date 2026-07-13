@@ -1,0 +1,3 @@
+# Los scripts de shell se ejecutan en Linux (deploy): SIEMPRE fin de línea LF.
+# Sin esto, con core.autocrlf=true en Windows quedan CRLF y rompen el deploy.
+*.sh text eol=lf
