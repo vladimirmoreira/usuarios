@@ -274,6 +274,9 @@ async function migrarDDL() {
     `ALTER TABLE usuario ADD documento          VARCHAR(20)`,
     `ALTER TABLE usuario ADD exclusion_permisos INTEGER  DEFAULT 0`,
     `ALTER TABLE usuario ADD hasta_vigencia     TIMESTAMP`,
+    // EMPRESAS.ACCESIBLE: 1 = empresa elegible en el combo de login multi-empresa
+    // (NULL se trata como accesible). Marcá 0 las de prueba/backup.
+    `ALTER TABLE empresas ADD accesible SMALLINT DEFAULT 1`,
   ];
 
   // BD server: tablas que deben existir + columnas adicionales
@@ -399,6 +402,10 @@ async function migrarDDL() {
          CONSTRAINT PK_TMP_MENU_MASTER PRIMARY KEY (POSICION))`,
       ...MENU_MASTER.map(([p, t, m]) =>
         `INSERT INTO TMP$USUARIO_MENU_MASTER (POSICION, TITULO, MODULO) VALUES (${p}, '${t}', ${m})`),
+      // EMPRESA.IDEMPRESA_SYSTEM: mapea la empresa MASTER ← empresa SYSTEM (multi-empresa).
+      // NULL/0 = no mapeada → el resolver cae a MASTER_IDEMPRESA. La tabla EMPRESA ya
+      // existe en el master legacy; acá solo se agrega la columna.
+      `ALTER TABLE empresa ADD idempresa_system VARCHAR(2)`,
     ];
     await runDDL('master', ddlMaster);
   }

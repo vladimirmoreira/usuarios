@@ -9,6 +9,22 @@ y las fechas están en formato `AAAA-MM-DD` (zona `America/Asuncion`).
 
 ## [No publicado] — 2026-07-13
 
+### Agregado — Login multi-empresa (2 fases) + empresa MASTER
+
+- **Login en 2 fases** sobre el mismo endpoint `POST /auth/login`: autentica **global**
+  (USUARIO es 1 fila por `iduser`) y calcula las **empresas accesibles** =
+  `usuarioempresa ∩ EMPRESAS.accesible=1 ∩ gate mnuArchivoPanelControl=1`. Con 1 empresa
+  entra directo; con >1 devuelve `{ multiEmpresa, empresas }` y el front muestra un
+  **combo**; la fase 2 (`{ iduser, pass, idempresa }`) valida y emite el JWT scopeado
+  (no otorga acceso nuevo). El refresh preserva la empresa elegida.
+- **`EMPRESAS.ACCESIBLE`** (system): 1 = elegible en el combo (agregado a `migrarDDL`).
+- **Empresa MASTER independiente**: `masterSync` traduce la empresa system → empresa
+  master vía `MASTER.EMPRESA.idempresa_system` (solo `estado=1` y mapeadas), con
+  fallback `env.MASTER_IDEMPRESA` (default `1`). Columna agregada a `migrarDDL` (master).
+- Doc nueva: `deploy/ESTRUCTURA_BD.md` — estructura de BD (tablas/columnas/seeds/índices)
+  para desplegar el módulo en un cliente nuevo. Los SP `PCD_USUARIO`/`PCD_OPERACIONES`
+  quedan **deprecados** (la lógica vive en Node).
+
 ### Agregado — "Usuario PDV" a nivel de rol (`GG_MESERO`)
 
 - El editor de rol suma un check **"Usuario PDV"** con un acordeón (**Sucursal

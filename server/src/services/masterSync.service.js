@@ -88,9 +88,12 @@ async function masterIdempresaDe(sysIdempresa) {
       const rows = await query(
         'master',
         // En MASTER la tabla es EMPRESA (singular); en SYSTEM es EMPRESAS (plural).
+        // Solo empresas activas y realmente mapeadas (idempresa_system distinto de vacío/0).
         `SELECT FIRST 1 CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) AS idempresa
            FROM empresa
-          WHERE CAST(TRIM(idempresa_system) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+          WHERE estado = 1
+            AND COALESCE(TRIM(idempresa_system), '0') <> '0'
+            AND CAST(TRIM(idempresa_system) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
         [sys],
       );
       const m = rows[0]?.idempresa != null ? String(rows[0].idempresa).trim() : '';
