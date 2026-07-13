@@ -298,10 +298,12 @@ export type RolUsuario = {
 
 export const RolesAPI = {
   listar: (params?: { estado?: number }) => api.get<Rol[]>('/roles', { params }).then((r) => r.data),
-  crear: (data: { descripcion: string; iduser: string; tipo: number; master?: number }) =>
+  crear: (data: { descripcion: string; iduser: string; tipo: number; master?: number; usuario_pdv?: number; idsucursal?: number | null; idtipo_mesero?: number | null }) =>
     api.post('/roles', data).then((r) => r.data),
-  actualizar: (idperfil: number, data: { descripcion: string; tipo: number; estado: number; master?: number; edicion_rol?: number }) =>
+  actualizar: (idperfil: number, data: { descripcion: string; tipo: number; estado: number; master?: number; edicion_rol?: number; usuario_pdv?: number; idsucursal?: number | null; idtipo_mesero?: number | null }) =>
     api.put(`/roles/${idperfil}`, data).then((r) => r.data),
+  obtenerUsuarioPdv: (idperfil: number) =>
+    api.get<{ habilitado: boolean; idsucursal: number | null; idtipo_mesero: number | null }>(`/roles/${idperfil}/usuario-pdv`).then((r) => r.data),
   eliminar: (idperfil: number) => api.delete(`/roles/${idperfil}`).then((r) => r.data),
   obtener: (idperfil: number | string) =>
     api.get<Accesos & { rol: Rol }>(`/roles/${idperfil}/accesos`).then((r) => r.data),
@@ -340,6 +342,8 @@ export const RolesAPI = {
 export const CatalogosAPI = {
   perfiles: () => api.get('/catalogos/perfiles').then((r) => r.data),
   sucursales: () => api.get('/catalogos/sucursales').then((r) => r.data),
+  sucursalesLocales: () => api.get<SucursalLocal[]>('/catalogos/sucursales-locales').then((r) => r.data),
+  tiposMesero: () => api.get<TipoMesero[]>('/catalogos/tipos-mesero').then((r) => r.data),
   talonarios: () => api.get<Talonario[]>('/catalogos/talonarios').then((r) => r.data),
   vendedores: () => api.get<Vendedor[]>('/catalogos/vendedores').then((r) => r.data),
   planventas: () => api.get<PlanVenta[]>('/catalogos/planventas').then((r) => r.data),
@@ -366,6 +370,8 @@ export type Talonario = {
   hasta: number | null;
   sucursal: string | null;
 };
+export type SucursalLocal = { idsucursal: number; nombre: string };
+export type TipoMesero    = { idtipo_mesero: number; descripcion: string };
 export type Vendedor  = { idvendedor: number; nombre: string; apellido: string };
 export type PlanVenta = { idplanventa: number; descripcion: string };
 export type Condicion = { idcondicion: number; descripcion: string };

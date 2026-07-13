@@ -9,11 +9,20 @@ const ctrl = require('../controllers/rol.controller');
 const idParam = { params: z.object({ idperfil: z.coerce.number().int().min(0) }) };
 const flagsBody = z.object({ flags: z.array(z.boolean()) });
 
+// Campos de "Usuario PDV" (crea/actualiza gg_mesero). idsucursal/idtipo_mesero
+// pueden venir null cuando usuario_pdv=0.
+const pdvFields = {
+  usuario_pdv: z.coerce.number().int().min(0).max(1).optional(),
+  idsucursal: z.coerce.number().int().nullable().optional(),
+  idtipo_mesero: z.coerce.number().int().nullable().optional(),
+};
+
 const rolBody = z.object({
   descripcion: z.string().min(1).max(60),
   iduser: z.string().min(1).max(20),
   tipo: z.coerce.number().int().min(0).max(1),
   master: z.coerce.number().int().min(0).max(1).optional(),
+  ...pdvFields,
 });
 
 const rolUpdateBody = z.object({
@@ -22,6 +31,7 @@ const rolUpdateBody = z.object({
   estado: z.coerce.number().int().min(0).max(1),
   master: z.coerce.number().int().min(0).max(1).optional(),
   edicion_rol: z.coerce.number().int().min(0).max(1).optional(),
+  ...pdvFields,
 });
 
 router.get('/', ctrl.listar);
@@ -30,6 +40,7 @@ router.put('/:idperfil', validate({ ...idParam, body: rolUpdateBody }), ctrl.act
 router.delete('/:idperfil', validate(idParam), ctrl.eliminar);
 
 router.get('/:idperfil/accesos', validate(idParam), ctrl.obtenerAccesos);
+router.get('/:idperfil/usuario-pdv', validate(idParam), ctrl.obtenerUsuarioPdv);
 router.get('/:idperfil/usuarios', validate(idParam), ctrl.listarUsuarios);
 router.post(
   '/:idperfil/propagar',

@@ -4,6 +4,7 @@ const AccesosService = require('../services/accesos.service');
 const MasterSyncService = require('../services/masterSync.service');
 const MenuModel = require('../models/menu.model');
 const RolModel = require('../models/rol.model');
+const GgMeseroModel = require('../models/ggMesero.model');
 const CatalogoModel = require('../models/catalogo.model');
 const env = require('../config/env');
 const { auditar, OP } = require('../utils/audit');
@@ -35,11 +36,18 @@ const RolController = {
 
   async crear(req, res, next) {
     try {
-      const { descripcion, iduser, tipo, master } = req.body;
+      const { descripcion, iduser, tipo, master, usuario_pdv, idsucursal, idtipo_mesero } = req.body;
+      if (usuario_pdv && (idsucursal == null || idtipo_mesero == null)) {
+        const e = new Error('Usuario PDV requiere sucursal y tipo de mesero'); e.status = 400; throw e;
+      }
       const id = await RolModel.crear({ descripcion, iduser, tipo, master });
       // Inicializar menu_general copiando de Admin con permiso=0
       const empresa = empresaDe(req) || env.DEFAULT_IDEMPRESA;
       await MenuModel.copiarDesdeAdmin(iduser.trim(), empresa);
+      // Usuario PDV → fila plantilla en gg_mesero (BD server)
+      if (usuario_pdv) {
+        await GgMeseroModel.crear({ iduser: iduser.trim(), apellido: descripcion.trim(), idsucursal, idtipo_mesero });
+      }
       await auditar(req, iduser, OP.ALTA, `Alta de Rol "${descripcion}" (id=${id})`);
       res.status(201).json({ ok: true, idtipo_usuario: id });
     } catch (e) { next(e); }
@@ -48,11 +56,35 @@ const RolController = {
   async actualizar(req, res, next) {
     try {
       const idperfil = Number(req.params.idperfil);
-      const { descripcion, tipo, estado, master } = req.body;
-      await RolModel.actualizar(idperfil, { descripcion, tipo, estado, master });
+      const { descripcion, tipo, estado, master, edicion_rol, usuario_pdv, idsucursal, idtipo_mesero } = req.body;
+      if (usuario_pdv && (idsucursal == null || idtipo_mesero == null)) {
+        const e = new Error('Usuario PDV requiere sucursal y tipo de mesero'); e.status = 400; throw e;
+      }
+      await RolModel.actualizar(idperfil, { descripcion, tipo, estado, master, edicion_rol });
       const rol = await RolModel.templateIduser(idperfil).catch(() => null);
-      if (rol?.iduser) await audRol(req, rol.iduser, `Actualización rol id=${idperfil}`);
+      if (rol?.iduser) {
+        // Usuario PDV: crear la fila si aún no existe, o actualizar sus combos.
+        // Nunca se desactiva/elimina desde acá (la baja va por el rol o sus usuarios).
+        if (usuario_pdv) {
+          const existe = await GgMeseroModel.obtenerPorUser(rol.iduser);
+          if (existe) await GgMeseroModel.actualizar(rol.iduser, { idsucursal, idtipo_mesero });
+          else await GgMeseroModel.crear({ iduser: rol.iduser, apellido: descripcion.trim(), idsucursal, idtipo_mesero });
+        }
+        await audRol(req, rol.iduser, `Actualización rol id=${idperfil}`);
+      }
       res.json({ ok: true });
+    } catch (e) { next(e); }
+  },
+
+  async obtenerUsuarioPdv(req, res, next) {
+    try {
+      const rol = await resolverTemplate(Number(req.params.idperfil));
+      const row = await GgMeseroModel.obtenerPorUser(rol.iduser);
+      res.json({
+        habilitado: !!row && Number(row.estado) === 1,
+        idsucursal: row?.idsucursal ?? null,
+        idtipo_mesero: row?.idtipo_mesero ?? null,
+      });
     } catch (e) { next(e); }
   },
 

@@ -45,6 +45,28 @@ const MENU_MASTER_FALLBACK = [
   { posicion: 19, titulo: 'Propiedades',             modulo: 2 },
 ];
 
+// Nombre de la columna "sucursal local": Firebird 2.5 legacy usa LOCAL, Firebird 5
+// usa ES_LOCAL. Se resuelve una vez contra el catálogo y se cachea.
+let _colLocal; // undefined = sin resolver | 'LOCAL' | 'ES_LOCAL' | null (ninguna)
+async function resolverColumnaLocal() {
+  if (_colLocal !== undefined) return _colLocal;
+  try {
+    const rows = await query(
+      'server',
+      `SELECT TRIM(rf.rdb$field_name) AS campo
+         FROM rdb$relation_fields rf
+        WHERE rf.rdb$relation_name = 'SUCURSAL'
+          AND TRIM(rf.rdb$field_name) IN ('ES_LOCAL', 'LOCAL')`,
+    );
+    const cols = rows.map((r) => String(r.campo).toUpperCase());
+    // Preferir ES_LOCAL (Firebird 5) si estuviera; si no, LOCAL (legacy 2.5).
+    _colLocal = cols.includes('ES_LOCAL') ? 'ES_LOCAL' : (cols.includes('LOCAL') ? 'LOCAL' : null);
+  } catch (_) {
+    _colLocal = null;
+  }
+  return _colLocal;
+}
+
 const CatalogoModel = {
   perfiles: async ({ estado } = {}) => {
     const estadoCond = estado != null ? 'AND COALESCE(u.estado, 0) = ?' : '';
@@ -79,13 +101,32 @@ const CatalogoModel = {
     query('server', `SELECT idsucursal, ${O('nombre', 'nombre')} FROM sucursal WHERE estado = 1 ORDER BY nombre`)
       .then((r) => decodeRows(r, ['nombre'])).catch(() => []),
 
+  // Solo sucursales locales — combo "Usuario PDV" del rol. La columna es LOCAL
+  // (Firebird 2.5) o ES_LOCAL (Firebird 5); se detecta dinámicamente. Si no
+  // existe ninguna, cae a todas las sucursales activas (mejor que combo vacío).
+  async sucursalesLocales() {
+    const col = await resolverColumnaLocal();
+    const cond = col ? `AND ${col} = 1` : '';
+    return query('server',
+      `SELECT idsucursal, ${O('nombre', 'nombre')} FROM sucursal WHERE estado = 1 ${cond} ORDER BY nombre`)
+      .then((r) => decodeRows(r, ['nombre'])).catch(() => []);
+  },
+
+  // Tipos de mesero PDV: 1=Vendedor/Cajero, 2=Driver, 3=Encargado de Ventas.
+  tiposMesero: () =>
+    query('server', `SELECT idtipo_mesero, ${O('descripcion', 'descripcion')} FROM gg_tipo_mesero
+        WHERE idtipo_mesero IN (1, 2, 3) ORDER BY idtipo_mesero`)
+      .then((r) => decodeRows(r, ['descripcion'])).catch(() => []),
+
   permisosGenerales: () =>
     query('system', `SELECT idpermiso, ${O('descripcion', 'descripcion')} FROM tmp$usuario_permisos_generales ORDER BY idpermiso`)
       .then((r) => decodeRows(r, ['descripcion'])).catch(() => []),
 
+  // menu_gg_2 se posiciona por idpermiso (número de ítem legacy), no por indice.
+  // Se ordena por idpermiso para reflejar el orden real del menú.
   permisosPdv: () =>
     query('system', `SELECT idpermiso, ${O('descripcion', 'descripcion')}, visible, indice
-         FROM tmp$usuario_permisos_pdv WHERE COALESCE(visible,0) = 1 ORDER BY indice`)
+         FROM tmp$usuario_permisos_pdv WHERE COALESCE(visible,0) = 1 ORDER BY idpermiso`)
       .then((r) => decodeRows(r, ['descripcion'])).catch(() => []),
 
   permisosConceptos: () =>

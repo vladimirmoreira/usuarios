@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, Plus, Pencil, Trash2, X, AlertTriangle, Search, Database, Lock } from 'lucide-react';
+import { ShieldCheck, Plus, Pencil, Trash2, X, AlertTriangle, Search, Database, Lock, Store } from 'lucide-react';
 import toast from '../../lib/notify';
-import { RolesAPI, type Rol } from '../../api/endpoints';
+import { RolesAPI, CatalogosAPI, type Rol } from '../../api/endpoints';
 import { useConfirm } from '../../hooks/useConfirm';
 
 const TIPOS = [
@@ -11,7 +11,11 @@ const TIPOS = [
   { value: 1, label: 'PDV' },
 ];
 
-const emptyForm = { descripcion: '', iduser: '', tipo: 0, master: 0, edicion_rol: 0 };
+const emptyForm = {
+  descripcion: '', iduser: '', tipo: 0, master: 0, edicion_rol: 0,
+  // Usuario PDV → crea fila en gg_mesero (BD server). idsucursal/idtipo_mesero: '' = sin elegir.
+  usuario_pdv: 0, idsucursal: '' as number | '', idtipo_mesero: '' as number | '',
+};
 
 export default function RolesPage() {
   const qc = useQueryClient();
@@ -27,27 +31,68 @@ export default function RolesPage() {
   const [editando, setEditando] = useState<Rol | null>(null);
   const [form, setForm] = useState(emptyForm);
 
+  // Combos del acordeón "Usuario PDV" (solo se cargan con el modal abierto).
+  const sucLocalesQ  = useQuery({ queryKey: ['cat', 'sucursales-locales'], queryFn: CatalogosAPI.sucursalesLocales, enabled: modal !== null });
+  const tiposMeseroQ = useQuery({ queryKey: ['cat', 'tipos-mesero'],       queryFn: CatalogosAPI.tiposMesero,       enabled: modal !== null });
+
+  // Estado "Usuario PDV" del rol en edición (gg_mesero ya existente).
+  const usuarioPdvQ = useQuery({
+    queryKey: ['roles', editando?.idtipo_usuario, 'usuario-pdv'],
+    queryFn: () => RolesAPI.obtenerUsuarioPdv(editando!.idtipo_usuario),
+    enabled: modal === 'editar' && !!editando,
+  });
+  // Si ya existe la fila mesero, precargar combos y bloquear el destildado.
+  const pdvBloqueado = modal === 'editar' && usuarioPdvQ.data?.habilitado === true;
+  useEffect(() => {
+    if (modal === 'editar' && usuarioPdvQ.data?.habilitado) {
+      setForm((f) => ({
+        ...f,
+        usuario_pdv: 1,
+        idsucursal: usuarioPdvQ.data!.idsucursal ?? '',
+        idtipo_mesero: usuarioPdvQ.data!.idtipo_mesero ?? '',
+      }));
+    }
+  }, [usuarioPdvQ.data, modal]);
+
   const abrirCrear = () => {
     setForm(emptyForm);
     setEditando(null);
     setModal('crear');
   };
   const abrirEditar = (r: Rol) => {
-    setForm({ descripcion: r.descripcion, iduser: r.iduser ?? '', tipo: r.tipo ?? 0, master: r.master ?? 0, edicion_rol: r.edicion_rol ?? 0 });
+    setForm({
+      descripcion: r.descripcion, iduser: r.iduser ?? '', tipo: r.tipo ?? 0,
+      master: r.master ?? 0, edicion_rol: r.edicion_rol ?? 0,
+      // El estado real de Usuario PDV se carga vía usuarioPdvQ (useEffect) al abrir.
+      usuario_pdv: 0, idsucursal: '', idtipo_mesero: '',
+    });
     setEditando(r);
     setModal('editar');
   };
   const cerrar = () => { setModal(null); setEditando(null); };
 
+  // Campos gg_mesero a enviar (null cuando el check está apagado).
+  const pdvPayload = () => ({
+    usuario_pdv: form.usuario_pdv,
+    idsucursal:   form.usuario_pdv ? (form.idsucursal   === '' ? null : form.idsucursal)   : null,
+    idtipo_mesero: form.usuario_pdv ? (form.idtipo_mesero === '' ? null : form.idtipo_mesero) : null,
+  });
+
   const crearM = useMutation({
-    mutationFn: () => RolesAPI.crear({ descripcion: form.descripcion, iduser: form.iduser, tipo: form.tipo, master: form.master }),
+    mutationFn: () => RolesAPI.crear({ descripcion: form.descripcion, iduser: form.iduser, tipo: form.tipo, master: form.master, ...pdvPayload() }),
     onSuccess: () => { toast.success('Rol creado'); qc.invalidateQueries({ queryKey: ['perfiles'] }); qc.invalidateQueries({ queryKey: ['roles'] }); cerrar(); },
     onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al crear'),
   });
 
   const editarM = useMutation({
-    mutationFn: () => RolesAPI.actualizar(editando!.idtipo_usuario, { descripcion: form.descripcion, tipo: form.tipo, estado: editando!.estado, master: form.master, edicion_rol: form.edicion_rol }),
-    onSuccess: () => { toast.success('Rol actualizado'); qc.invalidateQueries({ queryKey: ['perfiles'] }); qc.invalidateQueries({ queryKey: ['roles'] }); cerrar(); },
+    mutationFn: () => RolesAPI.actualizar(editando!.idtipo_usuario, { descripcion: form.descripcion, tipo: form.tipo, estado: editando!.estado, master: form.master, edicion_rol: form.edicion_rol, ...pdvPayload() }),
+    onSuccess: () => {
+      toast.success('Rol actualizado');
+      qc.invalidateQueries({ queryKey: ['perfiles'] });
+      qc.invalidateQueries({ queryKey: ['roles'] });
+      qc.invalidateQueries({ queryKey: ['roles', editando?.idtipo_usuario, 'usuario-pdv'] });
+      cerrar();
+    },
     onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al actualizar'),
   });
 
@@ -67,6 +112,9 @@ export default function RolesPage() {
   const onGuardar = () => {
     if (!form.descripcion.trim()) { toast.error('La descripción es requerida'); return; }
     if (modal === 'crear' && !form.iduser.trim()) { toast.error('El usuario plantilla es requerido'); return; }
+    if (form.usuario_pdv === 1 && (form.idsucursal === '' || form.idtipo_mesero === '')) {
+      toast.error('Usuario PDV: elegí sucursal y tipo de mesero'); return;
+    }
     modal === 'crear' ? crearM.mutate() : editarM.mutate();
   };
 
@@ -269,16 +317,66 @@ export default function RolesPage() {
                 <Database className="h-3.5 w-3.5 text-violet-600" />
                 Replica a BD <strong>Master</strong> (Contabilidad / RRHH)
               </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-zinc-700">
+              <label className="flex items-start gap-2 cursor-pointer select-none text-sm text-zinc-700">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded accent-brand-600"
+                  className="mt-0.5 h-4 w-4 rounded accent-brand-600"
                   checked={form.edicion_rol === 1}
                   onChange={(e) => setForm({ ...form, edicion_rol: e.target.checked ? 1 : 0 })}
                 />
-                <Lock className="h-3.5 w-3.5 text-amber-500" />
-                Permisos solo editables <strong>a través del rol</strong> (bloquea edición directa por usuario)
+                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <span>
+                  <span className="font-medium">Bloquear edición</span>
+                  <span className="block text-xs text-zinc-400">
+                    El permiso de usuario pertenece a un ROL que bloquea edición directa
+                  </span>
+                </span>
               </label>
+              {/* Usuario PDV → genera la fila plantilla en gg_mesero (BD server) */}
+              <label className={`flex items-center gap-2 select-none text-sm text-zinc-700 ${pdvBloqueado ? 'cursor-default' : 'cursor-pointer'}`}>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded accent-brand-600"
+                  checked={form.usuario_pdv === 1}
+                  disabled={pdvBloqueado}
+                  onChange={(e) => setForm({ ...form, usuario_pdv: e.target.checked ? 1 : 0 })}
+                />
+                <Store className="h-3.5 w-3.5 text-brand-600" />
+                Usuario <strong>PDV</strong>
+                {pdvBloqueado && (
+                  <span className="text-xs text-zinc-400">(ya creado — la baja va por el rol o sus usuarios)</span>
+                )}
+              </label>
+              {form.usuario_pdv === 1 && (
+                <div className="ml-6 space-y-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-3">
+                  <div>
+                    <label className="label">Sucursal (local)</label>
+                    <select
+                      className="input mt-1"
+                      value={form.idsucursal}
+                      onChange={(e) => setForm({ ...form, idsucursal: e.target.value === '' ? '' : Number(e.target.value) })}
+                    >
+                      <option value="">— seleccioná una sucursal —</option>
+                      {(sucLocalesQ.data ?? []).map((s) => (
+                        <option key={s.idsucursal} value={s.idsucursal}>{s.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Tipo de mesero</label>
+                    <select
+                      className="input mt-1"
+                      value={form.idtipo_mesero}
+                      onChange={(e) => setForm({ ...form, idtipo_mesero: e.target.value === '' ? '' : Number(e.target.value) })}
+                    >
+                      <option value="">— seleccioná un tipo —</option>
+                      {(tiposMeseroQ.data ?? []).map((t) => (
+                        <option key={t.idtipo_mesero} value={t.idtipo_mesero}>{t.descripcion}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
               {modal === 'editar' && (
                 <div>
                   <label className="label">Estado</label>

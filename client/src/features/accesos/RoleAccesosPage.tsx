@@ -16,6 +16,16 @@ export default function RoleAccesosPage() {
     queryFn: () => CatalogosAPI.perfiles(),
   });
 
+  // Usuarios asignados al rol. Un rol recién creado no tiene usuarios: en ese caso
+  // no tiene sentido ofrecer la propagación (no hay a quién propagar). Mismo
+  // queryKey que usa PropagateRolModal para compartir caché.
+  const usuariosQ = useQuery({
+    queryKey: ['roles', id, 'usuarios'],
+    queryFn: () => RolesAPI.listarUsuarios(id),
+    enabled: id > 0,
+    staleTime: 30_000,
+  });
+
   const rol = perfilesQ.data?.find((p: any) => Number(p.idtipo_usuario) === id);
 
   return (
@@ -28,7 +38,10 @@ export default function RoleAccesosPage() {
         api={RolesAPI as any}
         queryKey={['roles', 'accesos', id]}
         esAdmin={id === 1}
-        onGuardadoExitoso={() => setShowPropagar(true)}
+        onGuardadoExitoso={() => {
+          // Solo ofrecer propagar si el rol ya tiene usuarios asignados.
+          if ((usuariosQ.data?.length ?? 0) > 0) setShowPropagar(true);
+        }}
       />
       {showPropagar && (
         <PropagateRolModal

@@ -5,6 +5,8 @@ const ctrl = require('../controllers/catalogo.controller');
 
 router.get('/perfiles', ctrl.perfiles);
 router.get('/sucursales', ctrl.sucursales);
+router.get('/sucursales-locales', ctrl.sucursalesLocales);
+router.get('/tipos-mesero', ctrl.tiposMesero);
 router.get('/permisos-generales', ctrl.permisosGenerales);
 router.get('/permisos-pdv', ctrl.permisosPdv);
 router.get('/menu-base/:idperfil', ctrl.menuBase);

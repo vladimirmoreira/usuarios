@@ -52,7 +52,10 @@ function GlobalPermisosPanel({
   const activos = grupo.conceptos.filter((c) => c.permiso === 1);
   const n = activos.length;
 
-  if (n === 0) return null;
+  // El panel siempre se muestra (no se oculta en rol nuevo), pero queda
+  // deshabilitado mientras no haya conceptos elegidos: sin conceptos activos
+  // no hay a qué aplicar los permisos en lote.
+  const disabled = readOnly || n === 0;
 
   // Estado de cada permiso: 'all' | 'partial' | 'none'
   const estados = catalogo.map((_, i) => {
@@ -61,7 +64,7 @@ function GlobalPermisosPanel({
   });
 
   const toggleGlobal = (i: number) => {
-    if (readOnly) return;
+    if (disabled) return;
     const setTo = estados[i] !== 'all'; // si ya están todos, quitar; si no, poner
     onApply(
       grupo.conceptos.map((c) => {
@@ -74,7 +77,7 @@ function GlobalPermisosPanel({
   };
 
   const setAllGlobal = (v: boolean) => {
-    if (readOnly) return;
+    if (disabled) return;
     onApply(
       grupo.conceptos.map((c) => {
         if (c.permiso !== 1) return c;
@@ -84,12 +87,14 @@ function GlobalPermisosPanel({
   };
 
   return (
-    <div className="mb-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
+    <div className={`mb-2 rounded-lg border px-3 py-2 ${n === 0 ? 'border-zinc-200 bg-zinc-50' : 'border-brand-200 bg-brand-50'}`}>
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-brand-700">
-          Permisos globales — aplica a {n} concepto{n !== 1 ? 's' : ''} activo{n !== 1 ? 's' : ''}
+        <span className={`text-xs font-semibold uppercase tracking-wide ${n === 0 ? 'text-zinc-400' : 'text-brand-700'}`}>
+          {n === 0
+            ? 'Permisos globales — elegí conceptos para aplicarlos en lote'
+            : `Permisos globales — aplica a ${n} concepto${n !== 1 ? 's' : ''} activo${n !== 1 ? 's' : ''}`}
         </span>
-        {!readOnly && (
+        {!disabled && (
           <div className="flex gap-3 text-xs">
             <button className="text-brand-600 hover:underline" onClick={() => setAllGlobal(true)}>
               Marcar todos
@@ -100,22 +105,22 @@ function GlobalPermisosPanel({
           </div>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-x-4 gap-y-0.5">
+      <div className={`grid grid-cols-3 gap-x-4 gap-y-0.5 ${n === 0 ? 'opacity-60' : ''}`}>
         {catalogo.map((p, i) => (
           <button
             key={p.idpermiso_concepto}
             onClick={() => toggleGlobal(i)}
-            disabled={readOnly}
+            disabled={disabled}
             title={
-              readOnly
-                ? undefined
+              disabled
+                ? (n === 0 ? 'Marcá conceptos activos para habilitar los permisos globales' : undefined)
                 : estados[i] === 'all'
                 ? 'Todos los conceptos activos lo tienen — clic para quitar'
                 : estados[i] === 'partial'
                   ? 'Algunos conceptos lo tienen — clic para marcar todos'
                   : 'Ningún concepto activo lo tiene — clic para marcar todos'
             }
-            className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-xs ${readOnly ? 'cursor-default' : 'hover:bg-brand-100'}`}
+            className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 text-left text-xs ${disabled ? 'cursor-not-allowed' : 'hover:bg-brand-100'}`}
           >
             {estados[i] === 'all' ? (
               <CheckSquare className="h-3.5 w-3.5 shrink-0 text-brand-600" />

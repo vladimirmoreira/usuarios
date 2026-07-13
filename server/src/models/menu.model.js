@@ -3,6 +3,20 @@
 const { query, transaction } = require('../config/firebird');
 const { decodeRows } = require('../utils/charset');
 
+// Filtro SQL: excluye idmenus malformados (segmento idempresa vacío → '__'
+// consecutivo, p.ej. 'mnuRpt__3'). Replica cómo el legacy ignora esas entradas.
+const SIN_MALFORMADO = `idmenu NOT LIKE '%\\_\\_%' ESCAPE '\\'`;
+
+/**
+ * Deduplica por idmenu conservando el primero (las filas vienen ordenadas por
+ * idmenu_principal). Junto con SIN_MALFORMADO, replica el criterio del legacy:
+ * ignorar 'mnuRpt__N' y, si hay válidos repetidos, quedarse con el primero.
+ */
+function dedupMenu(rows) {
+  const seen = new Set();
+  return rows.filter((r) => (seen.has(r.idmenu) ? false : (seen.add(r.idmenu), true)));
+}
+
 const MenuModel = {
   async listarPorUsuario(iduser, idempresa) {
     return query(
@@ -15,9 +29,10 @@ const MenuModel = {
          FROM menu_general
         WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)
           AND idempresa = ?
+          AND ${SIN_MALFORMADO}
         ORDER BY idmenu_principal`,
       [String(iduser || '').trim().toUpperCase(), idempresa],
-    ).then((r) => decodeRows(r, ['iduser', 'idmenu', 'titulo']));
+    ).then((r) => dedupMenu(decodeRows(r, ['iduser', 'idmenu', 'titulo'])));
   },
 
   async listarPlantillaPorPerfil(idperfil) {
@@ -31,6 +46,7 @@ const MenuModel = {
         WHERE UPPER(m.iduser) = (
               SELECT FIRST 1 UPPER(iduser) FROM tipo_usuario WHERE idtipo_usuario = ?
         )
+          AND m.${SIN_MALFORMADO}
         ORDER BY m.idmenu_principal`,
       [idperfil],
     ).then((r) => decodeRows(r, ['idmenu', 'titulo']));
@@ -56,13 +72,16 @@ const MenuModel = {
    * Si el Admin no tiene registros para ese idempresa, no inserta nada.
    */
   async copiarDesdeAdmin(iduser, idempresa) {
-    const adminRows = await query(
+    const adminRows = dedupMenu(await query(
       'system',
-      `SELECT idmenu, titulo FROM menu_general
+      `SELECT idmenu_principal, CAST(idmenu AS VARCHAR(40) CHARACTER SET OCTETS) AS idmenu,
+              CAST(titulo AS VARCHAR(120) CHARACTER SET OCTETS) AS titulo
+         FROM menu_general
         WHERE UPPER(iduser) = 'ADMIN' AND idempresa = ?
+          AND ${SIN_MALFORMADO}
         ORDER BY idmenu_principal`,
       [idempresa],
-    );
+    ));
     if (!adminRows.length) return [];
 
     await transaction('system', async (tx) => {
@@ -75,19 +94,7 @@ const MenuModel = {
       }
     });
 
-    return query(
-      'system',
-      `SELECT idmenu_principal, idempresa,
-              CAST(iduser AS VARCHAR(10) CHARACTER SET OCTETS) AS iduser,
-              CAST(idmenu AS VARCHAR(40) CHARACTER SET OCTETS) AS idmenu,
-              CAST(titulo AS VARCHAR(120) CHARACTER SET OCTETS) AS titulo,
-              permiso
-         FROM menu_general
-        WHERE CAST(UPPER(TRIM(iduser)) AS VARCHAR(10) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(10) CHARACTER SET OCTETS)
-          AND idempresa = ?
-        ORDER BY idmenu_principal`,
-      [String(iduser || '').trim().toUpperCase(), idempresa],
-    ).then((r) => decodeRows(r, ['iduser', 'idmenu', 'titulo']));
+    return this.listarPorUsuario(iduser, idempresa);
   },
 };
 

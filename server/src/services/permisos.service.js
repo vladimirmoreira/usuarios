@@ -39,8 +39,8 @@ function encode01(arr = [], size = 0) {
 
 /**
  * permiso_varios en USUARIO_CONCEPTO:
- *   '0' = elegido / habilitado (true)
- *   '1' = no elegido / deshabilitado (false)
+ *   '1' = elegido / habilitado (true, check activado)
+ *   '0' = no elegido / deshabilitado (false)
  *   posición fuera de rango o carácter distinto → false
  */
 const SIZE_PERMISO_VARIOS = 15;
@@ -48,13 +48,13 @@ const SIZE_PERMISO_VARIOS = 15;
 function decodeConcepto(str, size = SIZE_PERMISO_VARIOS) {
   const s = str == null ? '' : String(str);
   const out = new Array(size).fill(false);
-  for (let i = 0; i < size; i++) out[i] = s[i] === '0'; // '0' = elegido = true
+  for (let i = 0; i < size; i++) out[i] = s[i] === '1'; // '1' = elegido = true
   return out;
 }
 
 function encodeConcepto(arr = [], size = SIZE_PERMISO_VARIOS) {
   let out = '';
-  for (let i = 0; i < size; i++) out += arr[i] ? '0' : '1'; // true→'0', false→'1'
+  for (let i = 0; i < size; i++) out += arr[i] ? '1' : '0'; // true→'1', false→'0'
   return out;
 }
 

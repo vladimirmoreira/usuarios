@@ -129,7 +129,13 @@ const OperacionesModel = {
       await tx.query(
         `INSERT INTO menu_general (idmenu_principal, idempresa, iduser, idmenu, titulo, permiso)
          SELECT gen_id(gen_menu_general, 1), m.idempresa, ?, m.idmenu, m.titulo, 0
-           FROM menu_general m WHERE UPPER(TRIM(m.iduser)) = 'ADMIN'`,
+           FROM menu_general m
+          WHERE UPPER(TRIM(m.iduser)) = 'ADMIN'
+            AND m.idmenu NOT LIKE '%\\_\\_%' ESCAPE '\\'
+            AND m.idmenu_principal = (
+                  SELECT MIN(m2.idmenu_principal) FROM menu_general m2
+                   WHERE UPPER(TRIM(m2.iduser)) = 'ADMIN' AND m2.idempresa = m.idempresa AND m2.idmenu = m.idmenu
+            )`,
         [iduser],
       );
       await tx.query(
@@ -187,9 +193,26 @@ const OperacionesModel = {
     return r[0] || null;
   },
 
-  async insertarMesero({ nombre, apellido, documento, idperfil, idpersona, idsucursal, iduser, idcargo }) {
-    // DECODE legacy: 7->3, 8->1, 10->1, 6->3
-    const tipoMesero = ({ 7: 3, 8: 1, 10: 1, 6: 3 })[idperfil] ?? null;
+  /**
+   * idtipo_mesero configurado para un rol vía "Usuario PDV" (fila plantilla en
+   * gg_mesero del iduser-template del rol). Devuelve 1/2/3 o null si no está configurado.
+   */
+  async tipoMeseroDeTemplate(templateIduser) {
+    if (!templateIduser) return null;
+    const r = await query(
+      'server',
+      `SELECT FIRST 1 idtipo_mesero FROM gg_mesero
+        WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?)) AND idtipo_mesero IS NOT NULL
+        ORDER BY idmesero`,
+      [templateIduser],
+    );
+    return r[0]?.idtipo_mesero ?? null;
+  },
+
+  async insertarMesero({ nombre, apellido, documento, idperfil, idpersona, idsucursal, iduser, idcargo, idtipoMesero }) {
+    // Cualquier rol PDV (tipo_usuario.tipo=1) debe quedar con un idtipo_mesero válido (1/2/3).
+    // Prioridad: tipo configurado en el rol (Usuario PDV) → mapa legacy → default 1.
+    const tipoMesero = idtipoMesero ?? ({ 7: 3, 8: 1, 10: 1, 6: 3 })[idperfil] ?? 1;
     return query(
       'server',
       `INSERT INTO gg_mesero (idmesero, nombre, apellido, nrodocumento, estado, clave,
@@ -430,12 +453,20 @@ async function _altaSystemPart(tx, { iduser, idperfil, nombre, apellido, documen
     [iduser, templateIduser],
   );
 
-  // MENU_GENERAL copiando del template
+  // MENU_GENERAL copiando del template. Se excluyen idmenus malformados
+  // ('__' consecutivo, idempresa vacío) y se deduplica por (idempresa, idmenu)
+  // conservando el primero (menor idmenu_principal), igual que ignora el legacy.
   await step(
     'MENU_GENERAL',
     `INSERT INTO menu_general (idmenu_principal, idempresa, iduser, idmenu, titulo, permiso)
      SELECT gen_id(gen_menu_general, 1), m.idempresa, ?, m.idmenu, m.titulo, m.permiso
-       FROM menu_general m WHERE m.iduser = ?`,
+       FROM menu_general m
+      WHERE m.iduser = ?
+        AND m.idmenu NOT LIKE '%\\_\\_%' ESCAPE '\\'
+        AND m.idmenu_principal = (
+              SELECT MIN(m2.idmenu_principal) FROM menu_general m2
+               WHERE m2.iduser = m.iduser AND m2.idempresa = m.idempresa AND m2.idmenu = m.idmenu
+        )`,
     [iduser, templateIduser],
   );
 }

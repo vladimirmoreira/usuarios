@@ -4,7 +4,9 @@ type PdvItem = { idpermiso: number; descripcion: string; indice: number };
 
 /**
  * Pestaña Punto de Ventas: muestra el catálogo TMP$USUARIO_PERMISOS_PDV
- * mapeando por `indice` contra el string posicional MENU_GG_2.
+ * posicionando cada ítem por su `idpermiso` (= número de ítem del menú legacy)
+ * contra el string posicional MENU_GG_2. El carácter del ítem N vive en
+ * `menu_gg_2[N-1]` (base 0). El campo `indice` del catálogo ya no se usa.
  */
 export default function PdvTab({
   catalogo,
@@ -17,6 +19,9 @@ export default function PdvTab({
   onChange: (next: boolean[]) => void;
   readOnly?: boolean;
 }) {
+  // Posición en menu_gg_2 (base 0) del ítem legacy identificado por idpermiso.
+  const pos = (c: PdvItem) => c.idpermiso - 1;
+
   const toggle = (idx: number) => {
     if (readOnly) return;
     const next = [...flags];
@@ -24,7 +29,7 @@ export default function PdvTab({
     onChange(next);
   };
 
-  const activos = catalogo.filter((c) => flags[c.indice]).length;
+  const activos = catalogo.filter((c) => flags[pos(c)]).length;
 
   return (
     <div>
@@ -37,16 +42,16 @@ export default function PdvTab({
         {catalogo.map((c) => (
           <button
             key={c.idpermiso}
-            onClick={() => toggle(c.indice)}
+            onClick={() => toggle(pos(c))}
             disabled={readOnly}
             className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-left text-xs ${readOnly ? 'cursor-default' : 'hover:bg-zinc-50'}`}
           >
-            {flags[c.indice] ? (
+            {flags[pos(c)] ? (
               <CheckSquare className="h-3.5 w-3.5 text-brand-600" />
             ) : (
               <Square className="h-3.5 w-3.5 text-zinc-300" />
             )}
-            <span className={flags[c.indice] ? 'text-zinc-800' : 'text-zinc-500'}>
+            <span className={flags[pos(c)] ? 'text-zinc-800' : 'text-zinc-500'}>
               {c.descripcion}
             </span>
           </button>

@@ -87,7 +87,8 @@ const AccesosService = {
         flags: decodeSN(ue?.permisos, SIZE_PERMISOS),
       },
       movimientos: {
-        flags: decodeSN(ue?.movimientos, SIZE_MOVIMIENTOS),
+        // MOVIMIENTOS es posicional 0/1 (no S/N): '1'=habilitado en la posición.
+        flags: decode01(ue?.movimientos, SIZE_MOVIMIENTOS),
       },
       pdv: {
         catalogo: catPdv,
@@ -103,7 +104,7 @@ const AccesosService = {
     PermisoModel.actualizarCampo(iduser, emp(idempresa), 'permisos', encodeSN(flags, SIZE_PERMISOS)),
 
   actualizarMovimientos: (iduser, flags, idempresa) =>
-    PermisoModel.actualizarCampo(iduser, emp(idempresa), 'movimientos', encodeSN(flags, SIZE_MOVIMIENTOS)),
+    PermisoModel.actualizarCampo(iduser, emp(idempresa), 'movimientos', encode01(flags, SIZE_MOVIMIENTOS)),
 
   actualizarPdv: (iduser, flags, idempresa) =>
     PermisoModel.actualizarCampo(iduser, emp(idempresa), 'menu_gg_2', encode01(flags, SIZE_MENU_GG_2)),

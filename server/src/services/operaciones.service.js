@@ -115,41 +115,60 @@ const OperacionesService = {
     }
     const flags = await cargarContexto(ip);
 
-    // Alta completa (USUARIO + USUARIOEMPRESA + MENU + sucursal/dep\u00f3sitos/conceptos)
+    // Alta completa (USUARIO + USUARIOEMPRESA + MENU + sucursal/dep\u00f3sitos/conceptos).
+    // Este es el n\u00facleo transaccional: si falla, no se crea nada (500 real).
     await OperacionesModel.altaCompleta({
       iduser, idperfil, nombre, apellido, documento, idsucursal,
       templateIduser: tpl.iduser,
     });
-    await audit({ iduser, idoperacion: OP.ALTA, rptUser,
-      observacion: `Perfil=${idperfil} Suc=${idsucursal} Doc=${documento}` });
+
+    // Post-efectos best-effort: el usuario YA est\u00e1 creado y confirmado, as\u00ed que un
+    // fallo aqu\u00ed (auditor\u00eda, legajo, mesero) NO debe tumbar el alta con un 500.
+    // Se registran como advertencias y se loguean (comportamiento espejo de altasBatch).
+    const advertencias = [];
+    const safe = async (label, fn) => {
+      try { await fn(); } catch (e) {
+        logger.warn({ err: e?.message, iduser, label }, 'altaUsuario post-efecto fall\u00f3');
+        advertencias.push(`${label}: ${e?.message || 'error'}`);
+      }
+    };
+
+    await safe('auditor\u00eda', () => audit({ iduser, idoperacion: OP.ALTA, rptUser,
+      observacion: `Perfil=${idperfil} Suc=${idsucursal} Doc=${documento}` }));
 
     // RH \u2014 vincular legajo si LEGAJO=1 y existe persona/cargo
     if (flags.legajo) {
-      const cargo = await OperacionesModel.cargoActivoPorDocumento(documento);
-      if (cargo?.idcargo && !cargo.user_system) {
-        await OperacionesModel.asignarUserSystemAlCargo(cargo.idcargo, iduser);
-        await audit({ iduser, idoperacion: OP.ALTA, rptUser,
-          observacion: `Legajo vinculado al cargo ${cargo.idcargo}` });
-      }
+      await safe('legajo', async () => {
+        const cargo = await OperacionesModel.cargoActivoPorDocumento(documento);
+        if (cargo?.idcargo && !cargo.user_system) {
+          await OperacionesModel.asignarUserSystemAlCargo(cargo.idcargo, iduser);
+          await audit({ iduser, idoperacion: OP.ALTA, rptUser,
+            observacion: `Legajo vinculado al cargo ${cargo.idcargo}` });
+        }
+      });
     }
 
     // PDV \u2014 dar de alta como mesero si GASTRONOMIA=1 y perfil tipo=1
     if (flags.gastronomia && Number(tpl.tipo) === 1) {
-      const cargo = flags.legajo ? await OperacionesModel.cargoActivoPorDocumento(documento) : null;
-      await OperacionesModel.insertarMesero({
-        nombre, apellido, documento, idperfil,
-        idpersona: cargo?.idpersona ?? null,
-        idsucursal, iduser,
-        idcargo: cargo?.idcargo ?? null,
+      await safe('gg_mesero', async () => {
+        const cargo = flags.legajo ? await OperacionesModel.cargoActivoPorDocumento(documento) : null;
+        const idtipoMesero = await OperacionesModel.tipoMeseroDeTemplate(tpl.iduser);
+        await OperacionesModel.insertarMesero({
+          nombre, apellido, documento, idperfil,
+          idpersona: cargo?.idpersona ?? null,
+          idsucursal, iduser,
+          idcargo: cargo?.idcargo ?? null,
+          idtipoMesero,
+        });
+        await audit({ iduser, idoperacion: OP.ALTA, rptUser,
+          observacion: 'Alta GG_MESERO (gastronom\u00eda)' });
       });
-      await audit({ iduser, idoperacion: OP.ALTA, rptUser,
-        observacion: 'Alta GG_MESERO (gastronom\u00eda)' });
     }
 
-    // MASTER \u2014 replicar si rol.master = 1
+    // MASTER \u2014 replicar si rol.master = 1 (ya es best-effort)
     replicarMaster(iduser, { ip });
 
-    return { ok: true, mensaje: 'EXITOSO' };
+    return { ok: true, mensaje: 'EXITOSO', ...(advertencias.length ? { advertencias } : {}) };
   },
 
   // ===========================================================================
@@ -246,10 +265,12 @@ const OperacionesService = {
         if (flags.gastronomia && Number(tpl.tipo) === 1) {
           const cargo = flags.legajo
             ? await OperacionesModel.cargoActivoPorDocumento(p.documento) : null;
+          const idtipoMesero = await OperacionesModel.tipoMeseroDeTemplate(tpl.iduser);
           await OperacionesModel.insertarMesero({
             nombre: p.nombre, apellido: p.apellido, documento: p.documento,
             idperfil: p.idperfil, idpersona: cargo?.idpersona ?? null,
             idsucursal: p.idsucursal, iduser: p.iduser, idcargo: cargo?.idcargo ?? null,
+            idtipoMesero,
           });
           await audit({ iduser: p.iduser, idoperacion: OP.ALTA, rptUser,
             observacion: 'Alta GG_MESERO (gastronomía) [lote]' });

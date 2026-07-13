@@ -11,6 +11,12 @@ const CatalogoController = {
   sucursales: async (_req, res, next) => {
     try { res.json(await CatalogoModel.sucursales()); } catch (e) { next(e); }
   },
+  sucursalesLocales: async (_req, res, next) => {
+    try { res.json(await CatalogoModel.sucursalesLocales()); } catch (e) { next(e); }
+  },
+  tiposMesero: async (_req, res, next) => {
+    try { res.json(await CatalogoModel.tiposMesero()); } catch (e) { next(e); }
+  },
   permisosGenerales: async (_req, res, next) => {
     try { res.json(await CatalogoModel.permisosGenerales()); } catch (e) { next(e); }
   },
