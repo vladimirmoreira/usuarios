@@ -37,6 +37,16 @@ router.get('/flags', ctrl.flags);
 router.get('/metadata',          ctrl.estadoMetadata);
 router.post('/metadata/ejecutar', ctrl.ejecutarMetadata);
 
+// Empresas: system (ACCESIBLE) + master (IDEMPRESA_SYSTEM). Van antes de '/:ip'.
+const idEmpParam = { params: z.object({ idempresa: z.string().min(1).max(2) }) };
+router.get('/empresas', ctrl.listarEmpresas);
+router.put('/empresas/system/:idempresa',
+  validate({ ...idEmpParam, body: z.object({ accesible: z.coerce.number().int().min(0).max(1) }) }),
+  ctrl.setEmpresaAccesible);
+router.put('/empresas/master/:idempresa',
+  validate({ ...idEmpParam, body: z.object({ idempresa_system: z.string().max(2).nullable().optional() }) }),
+  ctrl.setEmpresaMasterMapping);
+
 router.get('/',    ctrl.listar);
 router.post('/',   validate({ body: cfgBody }), ctrl.crear);
 router.get('/:ip', validate(ipParam), ctrl.obtener);

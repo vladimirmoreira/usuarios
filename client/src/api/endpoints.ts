@@ -54,6 +54,8 @@ export const UsuariosAPI = {
     api.post(`/usuarios/${iduser}/reasignar-sucursal`, { idsucursal }).then((r) => r.data),
   cambiarPerfil: (iduser: string, idperfil: number) =>
     api.post(`/usuarios/${iduser}/cambiar-perfil`, { idperfil }).then((r) => r.data),
+  clonarAEmpresa: (iduser: string, idempresaDestino: string) =>
+    api.post<{ ok: boolean; clonado: boolean; empresa?: string; detalle?: string | string[] }>(`/usuarios/${iduser}/clonar-empresa`, { idempresaDestino }).then((r) => r.data),
   bloquearSinMenu: () => api.post('/usuarios/bloquear-sin-menu').then((r) => r.data),
   actualizar: (iduser: string, data: { nombre?: string; apellido?: string; documento?: string; hasta_vigencia?: string | null }) =>
     api.patch(`/usuarios/${iduser}`, data).then((r) => r.data),
@@ -426,6 +428,9 @@ export type Configuracion = {
   metadata_ejecutado?: number | null;
 };
 
+export type EmpresaSystem = { idempresa: string; nombre: string; accesible: number };
+export type EmpresaMaster = { idempresa: string; razonsocial: string; estado: number; idempresa_system: string | null };
+
 export const ConfiguracionAPI = {
   listar:             ()          => api.get<Configuracion[]>('/configuracion').then((r) => r.data),
   obtener:            (ip:string) => api.get<Configuracion>(`/configuracion/${ip}`).then((r) => r.data),
@@ -437,6 +442,9 @@ export const ConfiguracionAPI = {
   flags:              ()          => api.get<ConfigFlags>('/configuracion/flags').then((r) => r.data),
   metadataEstado:     ()          => api.get<{ ejecutado: boolean }>('/configuracion/metadata').then((r) => r.data),
   metadataEjecutar:   ()          => api.post<MetadataResultado>('/configuracion/metadata/ejecutar').then((r) => r.data),
+  empresas:           ()          => api.get<{ system: EmpresaSystem[]; master: EmpresaMaster[] }>('/configuracion/empresas').then((r) => r.data),
+  setEmpresaAccesible:      (idempresa: string, accesible: number) => api.put(`/configuracion/empresas/system/${idempresa}`, { accesible }).then((r) => r.data),
+  setEmpresaMasterMapping:  (idempresa: string, idempresa_system: string | null) => api.put(`/configuracion/empresas/master/${idempresa}`, { idempresa_system }).then((r) => r.data),
 };
 
 export type MetadataResultado = {

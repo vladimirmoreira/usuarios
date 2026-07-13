@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Plus, Pencil, Trash2, X, List, HelpCircle, Database, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Settings, Plus, Pencil, Trash2, X, List, HelpCircle, Database, CheckCircle2, AlertCircle, Building2, Loader2 } from 'lucide-react';
 import toast from '../../lib/notify';
 import { ConfiguracionAPI, type Configuracion, type Operacion, type MetadataResultado } from '../../api/endpoints';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -67,7 +67,7 @@ export default function ConfiguracionPage() {
     queryFn: ConfiguracionAPI.listarOperaciones,
   });
 
-  const [tab, setTab]         = useState<'config' | 'catalogo' | 'metadata'>('config');
+  const [tab, setTab]         = useState<'config' | 'catalogo' | 'metadata' | 'empresas'>('config');
   const metaQ = useQuery<{ ejecutado: boolean }>({queryKey: ['configuracion', 'metadata'], queryFn: ConfiguracionAPI.metadataEstado});
   const metaM = useMutation<MetadataResultado>({mutationFn: ConfiguracionAPI.metadataEjecutar,
     onSuccess: (data) => {
@@ -75,6 +75,23 @@ export default function ConfiguracionPage() {
       qc.invalidateQueries({ queryKey: ['configuracion', 'metadata'] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al ejecutar'),
+  });
+
+  // ── Empresas (system + master) ──────────────────────────────────────────
+  const empresasQ = useQuery({ queryKey: ['configuracion', 'empresas'], queryFn: ConfiguracionAPI.empresas, enabled: tab === 'empresas' });
+  const invalidarEmpresas = () => {
+    qc.invalidateQueries({ queryKey: ['configuracion', 'empresas'] });
+    qc.invalidateQueries({ queryKey: ['empresas'] });
+  };
+  const accesibleM = useMutation({
+    mutationFn: (v: { idempresa: string; accesible: number }) => ConfiguracionAPI.setEmpresaAccesible(v.idempresa, v.accesible),
+    onSuccess: invalidarEmpresas,
+    onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al actualizar'),
+  });
+  const mappingM = useMutation({
+    mutationFn: (v: { idempresa: string; idempresa_system: string | null }) => ConfiguracionAPI.setEmpresaMasterMapping(v.idempresa, v.idempresa_system),
+    onSuccess: () => { toast.success('Mapeo actualizado'); invalidarEmpresas(); },
+    onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al actualizar'),
   });
 
   const [modal, setModal]     = useState<null | 'crear' | 'editar'>(null);
@@ -175,6 +192,14 @@ export default function ConfiguracionPage() {
             onClick={() => setTab('metadata')}
           >
             <Database className="h-3.5 w-3.5" /> Metadatos
+          </button>
+          <button
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              tab === 'empresas' ? 'bg-white shadow text-zinc-800' : 'text-zinc-500 hover:text-zinc-700'
+            }`}
+            onClick={() => setTab('empresas')}
+          >
+            <Building2 className="h-3.5 w-3.5" /> Empresas
           </button>
         </div>
         {tab === 'config' && (listQ.data?.length ?? 0) === 0 && (
@@ -363,6 +388,67 @@ export default function ConfiguracionPage() {
                   {(metaM.error as any)?.response?.data?.error || 'Error al ejecutar'}
                 </span>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'empresas' && (
+        <div className="card p-0 overflow-hidden">
+          {empresasQ.isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-zinc-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+            </div>
+          ) : (
+            <div className="grid gap-6 p-4 lg:grid-cols-2">
+              {/* SYSTEM */}
+              <div>
+                <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-zinc-700">
+                  <Building2 className="h-4 w-4 text-blue-600" /> Empresas (system)
+                </h3>
+                <p className="mb-2 text-xs text-zinc-400">Accesible = elegible en el combo de login multi-empresa.</p>
+                <div className="max-h-[60vh] divide-y divide-zinc-100 overflow-y-auto rounded-lg border border-zinc-200">
+                  {(empresasQ.data?.system ?? []).map((e) => (
+                    <div key={e.idempresa} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                      <span className="min-w-0 truncate"><span className="font-mono text-zinc-400">#{e.idempresa}</span> {e.nombre}</span>
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
+                        <input type="checkbox" className="h-4 w-4 rounded accent-brand-600" checked={e.accesible === 1}
+                          disabled={accesibleM.isPending}
+                          onChange={(ev) => accesibleM.mutate({ idempresa: e.idempresa, accesible: ev.target.checked ? 1 : 0 })} />
+                        <span className={e.accesible === 1 ? 'text-emerald-700' : 'text-zinc-400'}>Accesible</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* MASTER */}
+              <div>
+                <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-zinc-700">
+                  <Building2 className="h-4 w-4 text-violet-600" /> Empresas (master)
+                </h3>
+                <p className="mb-2 text-xs text-zinc-400"><code>idempresa_system</code> = empresa system a la que mapea (replica Contab./RRHH).</p>
+                <div className="max-h-[60vh] divide-y divide-zinc-100 overflow-y-auto rounded-lg border border-zinc-200">
+                  {(empresasQ.data?.master ?? []).map((e) => (
+                    <div key={e.idempresa} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                      <span className="min-w-0 truncate">
+                        <span className="font-mono text-zinc-400">#{e.idempresa}</span> {e.razonsocial}
+                        {e.estado !== 1 && <span className="ml-1 text-rose-400">(inactiva)</span>}
+                      </span>
+                      <select className="input w-40 shrink-0 py-0.5 text-xs" value={e.idempresa_system ?? ''}
+                        disabled={mappingM.isPending}
+                        onChange={(ev) => mappingM.mutate({ idempresa: e.idempresa, idempresa_system: ev.target.value || null })}>
+                        <option value="">— sin mapeo —</option>
+                        {(empresasQ.data?.system ?? []).map((s) => (
+                          <option key={s.idempresa} value={s.idempresa}>{s.idempresa} · {s.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  {(empresasQ.data?.master ?? []).length === 0 && (
+                    <div className="px-3 py-4 text-center text-xs text-zinc-400">Master no configurado o sin empresas.</div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

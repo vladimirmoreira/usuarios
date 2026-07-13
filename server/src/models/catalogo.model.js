@@ -177,6 +177,36 @@ const CatalogoModel = {
       })))
       .then((r) => (r.length ? r : MENU_MASTER_FALLBACK))
       .catch(() => MENU_MASTER_FALLBACK),
+
+  // ── Empresas (para el apartado de Configuración) ────────────────────────
+  // SYSTEM: EMPRESAS (con ACCESIBLE = elegible en el combo de login).
+  empresasSystem: () =>
+    query('system', `SELECT ${O('idempresa', 'idempresa', 2)}, ${O('nombre', 'nombre', 80)}, COALESCE(accesible, 1) AS accesible
+         FROM empresas ORDER BY idempresa`)
+      .then((r) => decodeRows(r, ['idempresa', 'nombre']).map((x) => ({
+        idempresa: String(x.idempresa).trim(), nombre: (x.nombre || '').trim(), accesible: Number(x.accesible),
+      }))).catch(() => []),
+
+  // MASTER: EMPRESA (singular) con IDEMPRESA_SYSTEM = mapeo a la empresa system.
+  empresasMaster: () =>
+    query('master', `SELECT ${O('idempresa', 'idempresa', 2)}, ${O('razonsocial', 'razonsocial', 120)},
+            COALESCE(estado, 0) AS estado, ${O('idempresa_system', 'idempresa_system', 2)}
+         FROM empresa ORDER BY idempresa`)
+      .then((r) => decodeRows(r, ['idempresa', 'razonsocial', 'idempresa_system']).map((x) => ({
+        idempresa: String(x.idempresa).trim(), razonsocial: (x.razonsocial || '').trim(),
+        estado: Number(x.estado),
+        idempresa_system: x.idempresa_system != null && String(x.idempresa_system).trim() !== '' ? String(x.idempresa_system).trim() : null,
+      }))).catch(() => []),
+
+  setEmpresaAccesible: (idempresa, accesible) =>
+    query('system', `UPDATE empresas SET accesible = ?
+        WHERE CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+      [accesible ? 1 : 0, String(idempresa).trim()]),
+
+  setEmpresaMasterMapping: (idempresa, idempresaSystem) =>
+    query('master', `UPDATE empresa SET idempresa_system = ?
+        WHERE CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+      [idempresaSystem == null || String(idempresaSystem).trim() === '' ? null : String(idempresaSystem).trim(), String(idempresa).trim()]),
 };
 
 module.exports = CatalogoModel;

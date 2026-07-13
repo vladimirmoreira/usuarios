@@ -215,6 +215,18 @@ const UsuarioController = {
     } catch (e) { next(e); }
   },
 
+  async clonarAEmpresa(req, res, next) {
+    try {
+      const r = await OperacionesService.clonarAEmpresa({
+        iduser: req.params.iduser,
+        origen: req.user?.idempresa,          // empresa logueada (JWT)
+        destino: req.body.idempresaDestino,
+        rptUser: rptDe(req), ip: ipDe(req),
+      });
+      res.json(r);
+    } catch (e) { next(e); }
+  },
+
   async obtenerComplemento(req, res, next) {
     try { res.json(await UsuarioModel.getComplemento(req.params.iduser)); }
     catch (e) { next(e); }

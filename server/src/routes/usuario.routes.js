@@ -149,6 +149,12 @@ router.post(
   validate({ ...idParam, body: z.object({ idperfil: z.number().int().min(0) }) }),
   ctrl.cambiarPerfil,
 );
+// Clonar accesos per-empresa (USUARIOEMPRESA + MENU_GENERAL) a otra empresa.
+router.post(
+  '/:iduser/clonar-empresa',
+  validate({ ...idParam, body: z.object({ idempresaDestino: z.coerce.string().min(1).max(2) }) }),
+  ctrl.clonarAEmpresa,
+);
 router.get('/:iduser/historial', validate(idParam), ctrl.historial);
 router.get('/:iduser/sucursal-principal', validate(idParam), ctrl.sucursalPrincipal);
 router.get('/:iduser/foto', validate(idParam), ctrl.foto);

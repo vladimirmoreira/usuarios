@@ -1,9 +1,10 @@
 import { useState, ChangeEvent, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Pencil, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { X, Pencil, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, MapPin, Copy } from 'lucide-react';
 import toast from '../../lib/notify';
 import { z } from 'zod';
 import { RolesAPI, Rol, UsuariosAPI, Usuario, Complemento, ConfiguracionAPI } from '../../api/endpoints';
+import { useAuth } from '../../auth/AuthContext';
 
 /* ── Esquema ───────────────────────────────────────────────────────── */
 const schema = z.object({
@@ -59,6 +60,23 @@ export default function EditarUsuarioModal({
 
   const perfilesQ = useQuery({ queryKey: ['perfiles-all'], queryFn: () => RolesAPI.listar() });
   const flagsQ    = useQuery({ queryKey: ['cfg-flags'], queryFn: ConfiguracionAPI.flags });
+
+  // Clonar accesos a otra empresa. Destinos = accesibles, ≠ 1 (base) y ≠ la actual.
+  const { user } = useAuth();
+  const empresasQ = useQuery({ queryKey: ['empresas'], queryFn: ConfiguracionAPI.empresas, staleTime: 60_000 });
+  const [destino, setDestino] = useState('');
+  const destinos = (empresasQ.data?.system ?? []).filter(
+    (e) => e.accesible === 1 && e.idempresa !== '1' && e.idempresa !== user?.idempresa,
+  );
+  const clonarM = useMutation({
+    mutationFn: () => UsuariosAPI.clonarAEmpresa(usuario.iduser, destino),
+    onSuccess: (r) => {
+      if (r.clonado) toast.success(`Accesos clonados a la empresa ${r.empresa}`);
+      else toast(typeof r.detalle === 'string' ? r.detalle : 'Sin cambios', { icon: 'ℹ️' });
+      setDestino('');
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al clonar'),
+  });
 
   // "pendiente": el usuario aún no tiene un rol real (Sin Rol=0, Sin Asignación=-1 o NULL).
   // Solo en ese estado se puede asignar "Sin Rol"; con rol real no se permite el downgrade.
@@ -307,6 +325,35 @@ export default function EditarUsuarioModal({
                 <label className="label">Vigencia hasta</label>
                 <input type="date" value={form.hasta_vigencia} onChange={setField('hasta_vigencia')} className="input mt-1" />
                 <p className="mt-0.5 text-xs text-slate-400">Vacío = sin caducidad</p>
+              </div>
+
+              {/* Clonar accesos a otra empresa (celda libre al lado de Vigencia) */}
+              <div>
+                <label className="label">Clonar accesos a empresa</label>
+                <div className="mt-1 flex gap-2">
+                  <select
+                    className="input"
+                    value={destino}
+                    onChange={(e) => setDestino(e.target.value)}
+                    disabled={empresasQ.isLoading || clonarM.isPending}
+                  >
+                    <option value="">— empresa destino —</option>
+                    {destinos.map((e) => (
+                      <option key={e.idempresa} value={e.idempresa}>{e.nombre} (#{e.idempresa})</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-outline shrink-0"
+                    disabled={!destino || clonarM.isPending}
+                    onClick={() => clonarM.mutate()}
+                    title="Copia permisos y menú a la empresa destino (no sucursal ni depósitos)"
+                  >
+                    {clonarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                    Clonar
+                  </button>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-400">Copia permisos/menú (no sucursal/depósitos). No sobrescribe si ya existe.</p>
               </div>
 
               {/* Sucursal actual (read-only) */}

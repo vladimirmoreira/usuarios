@@ -21,9 +21,11 @@
 const OperacionesModel = require('../models/operaciones.model');
 const AccesosService = require('./accesos.service');
 const MasterSyncService = require('./masterSync.service');
+const MasterModel = require('../models/master.model');
 const { auditarDirecto } = require('../utils/audit');
-const { transaction } = require('../config/firebird');
+const { query, transaction } = require('../config/firebird');
 const { OP, OP_BY_ID } = require('../config/operaciones.config');
+const env = require('../config/env');
 const logger = require('../utils/logger');
 
 const CLAVE_DEFECTO = '12345678901234567890';
@@ -71,6 +73,37 @@ function replicarMaster(iduser, { ip, claveNueva } = {}) {
   MasterSyncService.syncUsuario(iduser, { ip, claveNueva }).catch((err) => {
     logger.warn({ err: err?.message, iduser }, 'masterSync failed (best-effort)');
   });
+}
+
+/** \u00bfEl rol del usuario replica a MASTER? (tipo_usuario.master=1; ADMIN siempre). */
+async function rolEsMaster(iduser) {
+  if (!iduser) return false;
+  if (iduser.trim().toUpperCase() === 'ADMIN') return true;
+  const r = await query(
+    'system',
+    `SELECT FIRST 1 COALESCE(t.master,0) AS master FROM usuario u
+       LEFT JOIN tipo_usuario t ON t.idtipo_usuario = u.idtipo_usuario
+      WHERE UPPER(TRIM(u.iduser)) = UPPER(TRIM(?))`,
+    [iduser],
+  );
+  return Number(r[0]?.master) === 1;
+}
+
+/** Empresa MASTER mapeada a una empresa SYSTEM (EMPRESA.idempresa_system), o null. */
+async function masterEmpMapeada(sysIdempresa) {
+  const s = String(sysIdempresa ?? '').trim();
+  if (!s) return null;
+  try {
+    const r = await query(
+      'master',
+      `SELECT FIRST 1 CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) AS idempresa
+         FROM empresa
+        WHERE estado = 1 AND COALESCE(TRIM(idempresa_system),'0') <> '0'
+          AND CAST(TRIM(idempresa_system) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+      [s],
+    );
+    return r[0]?.idempresa ? String(r[0].idempresa).trim() : null;
+  } catch (_) { return null; }
 }
 
 const OperacionesService = {
@@ -186,6 +219,117 @@ const OperacionesService = {
     // pero el editor muestra Contab./RRHH sin activar si el pool está habilitado.
     void ip;
     return { ok: true, mensaje: 'EXITOSO' };
+  },
+
+  // ===========================================================================
+  // CLONAR ACCESOS A OTRA EMPRESA
+  // ===========================================================================
+  /**
+   * Clona los accesos per-empresa de SYSTEM (USUARIOEMPRESA + MENU_GENERAL) de la
+   * empresa `origen` a la empresa `destino` para un usuario. NO toca las tablas por
+   * usuario (usuario_concepto / sucursal / depósitos = globales). Si el rol es master
+   * y la empresa destino tiene mapeo `EMPRESA.idempresa_system`, también clona los
+   * accesos master. Reglas: destino ≠ 1 (base), destino accesible=1, y si el usuario
+   * ya tiene accesos en destino no se hace nada.
+   */
+  async clonarAEmpresa({ iduser, origen, destino, rptUser, ip }) {
+    const src = String(origen ?? '').trim();
+    const dst = String(destino ?? '').trim();
+    if (!dst)        { const e = new Error('Empresa destino requerida'); e.status = 400; throw e; }
+    if (dst === '1') { const e = new Error('La empresa 1 (base) no puede ser destino'); e.status = 400; throw e; }
+    if (!src)        { const e = new Error('Empresa origen requerida'); e.status = 400; throw e; }
+    if (dst === src) { const e = new Error('Origen y destino no pueden ser iguales'); e.status = 400; throw e; }
+    if (!await OperacionesModel.existeUsuario(iduser)) {
+      const e = new Error('Usuario no encontrado'); e.status = 404; throw e;
+    }
+
+    // Destino: debe existir y estar accesible=1
+    const empRows = await query(
+      'system',
+      `SELECT FIRST 1 COALESCE(accesible,1) AS acc
+         FROM empresas
+        WHERE CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+      [dst],
+    );
+    if (!empRows.length) { const e = new Error('Empresa destino inexistente'); e.status = 400; throw e; }
+    if (Number(empRows[0].acc) !== 1) {
+      const e = new Error('La empresa destino no está marcada como accesible'); e.status = 400; throw e;
+    }
+
+    const tieneUE = async (emp) => (await query(
+      'system',
+      `SELECT FIRST 1 iduser FROM usuarioempresa
+        WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))
+          AND CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+      [iduser, emp],
+    )).length > 0;
+
+    if (!await tieneUE(src)) {
+      const e = new Error(`El usuario no tiene accesos en la empresa origen (${src})`); e.status = 400; throw e;
+    }
+    // Punto 3: si ya tiene accesos en destino, no hacer nada.
+    if (await tieneUE(dst)) {
+      return { ok: true, mensaje: 'EXITOSO', clonado: false,
+        detalle: `El usuario ya tenía accesos en la empresa ${dst}; no se modificó nada.` };
+    }
+
+    const d = [];
+    // ── Clon SYSTEM: USUARIOEMPRESA + MENU_GENERAL (origen → destino) ──
+    await transaction('system', async (tx) => {
+      await tx.query(
+        `INSERT INTO usuarioempresa
+           (iduser, idempresa, permisos, menu, anovigente, perfil, movimientos,
+            modo_print, descuento, talonario, menu_gg_2, permiso_gg, menu_gg_1, menu_gg)
+         SELECT iduser, ?, permisos, menu, anovigente, perfil, movimientos,
+                modo_print, descuento, talonario, menu_gg_2, permiso_gg, menu_gg_1, menu_gg
+           FROM usuarioempresa
+          WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))
+            AND CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+        [dst, iduser, src],
+      );
+      await tx.query(
+        `INSERT INTO menu_general (idmenu_principal, idempresa, iduser, idmenu, titulo, permiso)
+         SELECT gen_id(gen_menu_general, 1), ?, iduser, idmenu, titulo, permiso
+           FROM menu_general
+          WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))
+            AND CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+        [dst, iduser, src],
+      );
+    });
+    d.push(`[system] USUARIOEMPRESA + MENU_GENERAL clonados: empresa ${src} → ${dst}`);
+
+    // ── Clon MASTER (best-effort): solo si rol master y destino tiene mapeo ──
+    try {
+      if (MasterModel.habilitado() && await rolEsMaster(iduser)) {
+        const masterDst = await masterEmpMapeada(dst);
+        if (!masterDst) {
+          d.push(`[master] destino ${dst} sin mapeo idempresa_system → no se clonó`);
+        } else {
+          const masterSrc = (await masterEmpMapeada(src)) || String(env.MASTER_IDEMPRESA || '1');
+          await MasterSyncService.syncUsuario(iduser, { ip, idempresa: src });
+          const mSrc = await MasterModel.obtenerUsuarioEmpresa(iduser, masterSrc);
+          const mDst = await MasterModel.obtenerUsuarioEmpresa(iduser, masterDst);
+          if (mSrc && !mDst) {
+            await MasterModel.upsertUsuarioEmpresa({
+              iduser, idempresa: masterDst,
+              permisos: mSrc.permisos, menu: mSrc.menu, modulos: mSrc.modulos || '100', estado: 1,
+            });
+            d.push(`[master] accesos clonados: empresa ${masterSrc} → ${masterDst}`);
+          } else {
+            d.push(`[master] ${mDst ? 'ya existía en ' + masterDst + ', sin cambios' : 'sin accesos origen para clonar'}`);
+          }
+        }
+      }
+    } catch (e) {
+      logger.warn({ err: e.message, iduser, dst }, 'clonarAEmpresa master falló (best-effort)');
+      d.push(`[master] error: ${e.message}`);
+    }
+
+    // Log (punto 6)
+    await audit({ iduser, idoperacion: OP.ACTUALIZAR_CUENTA, rptUser,
+      observacion: buildDetalle([`Clonación de accesos a empresa ${dst} (origen ${src})`, ...d]) });
+
+    return { ok: true, mensaje: 'EXITOSO', clonado: true, empresa: dst, detalle: d };
   },
 
   // ===========================================================================

@@ -2,11 +2,42 @@
 
 const ConfiguracionModel = require('../models/configuracion.model');
 const OperacionesModel   = require('../models/operaciones.model');
+const CatalogoModel      = require('../models/catalogo.model');
 const { OPERACIONES } = require('../config/operaciones.config');
 const { auditar, OP } = require('../utils/audit');
 const MetadataService    = require('../services/metadata.service');
 
 const ConfiguracionController = {
+  // ── Empresas (system + master) ──────────────────────────────────────────
+  async listarEmpresas(_req, res, next) {
+    try {
+      const [system, master] = await Promise.all([
+        CatalogoModel.empresasSystem(),
+        CatalogoModel.empresasMaster(),
+      ]);
+      res.json({ system, master });
+    } catch (e) { next(e); }
+  },
+
+  async setEmpresaAccesible(req, res, next) {
+    try {
+      await CatalogoModel.setEmpresaAccesible(req.params.idempresa, req.body.accesible);
+      await auditar(req, `EMP-${req.params.idempresa}`, OP.ACTUALIZAR_CUENTA,
+        `Empresa ${req.params.idempresa} accesible=${req.body.accesible}`);
+      res.json({ ok: true });
+    } catch (e) { next(e); }
+  },
+
+  async setEmpresaMasterMapping(req, res, next) {
+    try {
+      const val = req.body.idempresa_system ?? null;
+      await CatalogoModel.setEmpresaMasterMapping(req.params.idempresa, val);
+      await auditar(req, `EMPM-${req.params.idempresa}`, OP.ACTUALIZAR_CUENTA,
+        `Empresa master ${req.params.idempresa} idempresa_system=${val ?? 'NULL'}`);
+      res.json({ ok: true });
+    } catch (e) { next(e); }
+  },
+
   async listar(req, res, next) {
     try {
       const data = await ConfiguracionModel.listar();
