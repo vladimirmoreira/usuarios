@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
-type UserInfo = { iduser: string; nombre: string; apellido: string; idperfil: number } | null;
+type UserInfo = {
+  iduser: string; nombre: string; apellido: string; idperfil: number;
+  idempresa?: string; empresaNombre?: string;
+} | null;
 
 type AuthCtx = {
   token: string | null;

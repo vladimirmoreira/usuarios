@@ -1,8 +1,14 @@
 import api from './client';
 
+export type EmpresaOpcion = { idempresa: string; nombre: string };
+export type LoginResp =
+  | { multiEmpresa: true; empresas: EmpresaOpcion[] }
+  | { accessToken: string; refreshToken: string; usuario: any };
+
 export const AuthAPI = {
-  login: (iduser: string, pass: string) =>
-    api.post('/auth/login', { iduser, pass }).then((r) => r.data),
+  // Fase 1: sin idempresa. Fase 2 (multi-empresa): con la empresa elegida del combo.
+  login: (iduser: string, pass: string, idempresa?: string) =>
+    api.post<LoginResp>('/auth/login', { iduser, pass, ...(idempresa ? { idempresa } : {}) }).then((r) => r.data),
 };
 
 export type Usuario = {

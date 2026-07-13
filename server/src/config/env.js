@@ -9,6 +9,9 @@ const schema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5175'),
 
   DEFAULT_IDEMPRESA: z.string().default('1'),
+  // Empresa de la BD MASTER (Contab./RRHH). Master suele ser mono-empresa; este es
+  // el fallback cuando no hay mapeo EMPRESAS.idempresa_system para la empresa system.
+  MASTER_IDEMPRESA: z.string().default('1'),
 
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES: z.string().default('15m'),

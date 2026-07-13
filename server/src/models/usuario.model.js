@@ -31,6 +31,62 @@ const UsuarioModel = {
     return u;
   },
 
+  /**
+   * Busca el usuario GLOBAL por iduser (sin filtrar por idempresa). USUARIO es una
+   * fila por iduser; la empresa se elige en el login (multi-empresa). Solo activos.
+   */
+  async findGlobal(iduser) {
+    const idu = String(iduser || '').trim().toUpperCase();
+    const rows = await query(
+      'system',
+      `SELECT FIRST 1
+              CAST(u.iduser   AS VARCHAR(12)  CHARACTER SET OCTETS) AS iduser,
+              CAST(u.nombre   AS VARCHAR(120) CHARACTER SET OCTETS) AS nombre,
+              CAST(u.apellido AS VARCHAR(120) CHARACTER SET OCTETS) AS apellido,
+              CAST(u.idempresa AS VARCHAR(2)  CHARACTER SET OCTETS) AS idempresa,
+              u.idtipo_usuario, u.estado, u.pass, u.hasta_vigencia
+         FROM usuario u
+        WHERE CAST(UPPER(TRIM(u.iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)
+          AND COALESCE(u.estado,0) = 1`,
+      [idu],
+    );
+    return rows[0] ? decodeRows([rows[0]], ['iduser', 'nombre', 'apellido', 'idempresa'])[0] : null;
+  },
+
+  /**
+   * Empresas a las que el usuario PUEDE ingresar en este módulo:
+   *   - tiene fila en USUARIOEMPRESA para esa empresa,
+   *   - la empresa está marcada accesible (EMPRESAS.ACCESIBLE = 1; NULL = accesible),
+   *   - y tiene el gate del módulo (menu_general 'mnuArchivoPanelControl' permiso=1
+   *     para esa empresa).
+   * Devuelve [{ idempresa, nombre }] ordenado por idempresa numérica.
+   */
+  async empresasAccesibles(iduser) {
+    const idu = String(iduser || '').trim().toUpperCase();
+    const rows = await query(
+      'system',
+      `SELECT DISTINCT
+              CAST(TRIM(ue.idempresa) AS VARCHAR(2)  CHARACTER SET OCTETS) AS idempresa,
+              CAST(e.nombre           AS VARCHAR(80) CHARACTER SET OCTETS) AS nombre
+         FROM usuarioempresa ue
+         JOIN empresas e
+           ON CAST(TRIM(e.idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(TRIM(ue.idempresa) AS VARCHAR(2) CHARACTER SET OCTETS)
+        WHERE CAST(UPPER(TRIM(ue.iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)
+          AND COALESCE(e.accesible, 1) = 1
+          AND EXISTS (
+                SELECT 1 FROM menu_general mg
+                 WHERE CAST(UPPER(TRIM(mg.iduser)) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(30) CHARACTER SET OCTETS)
+                   AND CAST(TRIM(mg.idmenu) AS VARCHAR(30) CHARACTER SET OCTETS) = CAST('mnuArchivoPanelControl' AS VARCHAR(30) CHARACTER SET OCTETS)
+                   AND mg.permiso = 1
+                   AND CAST(TRIM(mg.idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(TRIM(ue.idempresa) AS VARCHAR(2) CHARACTER SET OCTETS)
+              )`,
+      [idu, idu],
+    );
+    return decodeRows(rows, ['idempresa', 'nombre'])
+      .map((r) => ({ idempresa: String(r.idempresa).trim(), nombre: (r.nombre || '').trim() }))
+      .sort((a, b) => Number(a.idempresa) - Number(b.idempresa));
+  },
+
   async findById(iduser) {
     const rows = await query(
       'system',

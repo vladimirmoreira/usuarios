@@ -7,7 +7,14 @@ const ctrl = require('../controllers/auth.controller');
 
 router.post(
   '/login',
-  validate({ body: z.object({ iduser: z.string().min(1).max(10), pass: z.string().min(1).max(20) }) }),
+  validate({
+    body: z.object({
+      iduser: z.string().min(1).max(10),
+      pass: z.string().min(1).max(20),
+      // Fase 2 del login multi-empresa: la empresa elegida del combo (opcional).
+      idempresa: z.string().max(2).optional(),
+    }),
+  }),
   ctrl.login,
 );
 

@@ -74,6 +74,32 @@ async function modulosHabilitados(ip) {
   };
 }
 
+/**
+ * Traduce la empresa del SYSTEM a la empresa del MASTER (independientes).
+ * Master suele ser mono-empresa; el mapeo vive en MASTER.EMPRESAS.idempresa_system.
+ *   1) busca la empresa master cuyo idempresa_system = la empresa system dada;
+ *   2) si no hay, cae a env.MASTER_IDEMPRESA (default '1').
+ * Best-effort: si la columna/tabla no existe, usa el fallback.
+ */
+async function masterIdempresaDe(sysIdempresa) {
+  const sys = String(sysIdempresa ?? '').trim();
+  if (sys) {
+    try {
+      const rows = await query(
+        'master',
+        // En MASTER la tabla es EMPRESA (singular); en SYSTEM es EMPRESAS (plural).
+        `SELECT FIRST 1 CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) AS idempresa
+           FROM empresa
+          WHERE CAST(TRIM(idempresa_system) AS VARCHAR(2) CHARACTER SET OCTETS) = CAST(? AS VARCHAR(2) CHARACTER SET OCTETS)`,
+        [sys],
+      );
+      const m = rows[0]?.idempresa != null ? String(rows[0].idempresa).trim() : '';
+      if (m) return m;
+    } catch (_) { /* master viejo sin la columna → fallback */ }
+  }
+  return String(env.MASTER_IDEMPRESA || '1').trim();
+}
+
 function calcularModulos(menuArr) {
   // pos1=Sistema(siempre 1), pos2=Contab (alg\u00fan check 1..12), pos3=RRHH (alg\u00fan check 13..19)
   const contab = menuArr.slice(0, 12).some(Boolean) ? '1' : '0';
@@ -92,14 +118,14 @@ function calcularMenuver(modulosHab) {
 
 const MasterSyncService = {
   SIZE_PERMISOS, SIZE_MENU, SIZE_MENUVER, SIZE_MODULOS,
-  pad01, read01, calcularModulos, calcularMenuver,
+  pad01, read01, calcularModulos, calcularMenuver, masterIdempresaDe,
 
   /**
    * Sincroniza el usuario en MASTER si corresponde (best-effort: nunca tira la request).
    * @param {string} iduser
    * @param {object} ctx { ip, claveNueva }
    */
-  async syncUsuario(iduser, { ip = null, claveNueva = null } = {}) {
+  async syncUsuario(iduser, { ip = null, claveNueva = null, idempresa = null } = {}) {
     try {
       if (!MasterModel.habilitado()) return { skipped: 'master-disabled' };
       const rolMaster = await rolMasterDe(iduser);
@@ -114,6 +140,8 @@ const MasterSyncService = {
       if (!u) return { skipped: 'usuario-no-encontrado' };
 
       const menuver = calcularMenuver(modHab);
+      // Empresa MASTER (traducida desde la empresa system operativa; fallback a la de origen).
+      const masterEmp = await masterIdempresaDe(idempresa || u.idempresa);
 
       await MasterModel.upsertUsuario({
         iduser: u.iduser,
@@ -121,16 +149,16 @@ const MasterSyncService = {
         apellido: u.apellido,
         clave: claveNueva || null,
         estado: u.estado,
-        idempresa: u.idempresa || Number(env.DEFAULT_IDEMPRESA),
+        idempresa: masterEmp,
         menuver,
       });
 
       // Si no existe USUARIOEMPRESA, crear con menu/permisos vac\u00edos y MODULOS calculados
-      const ue = await MasterModel.obtenerUsuarioEmpresa(u.iduser, u.idempresa);
+      const ue = await MasterModel.obtenerUsuarioEmpresa(u.iduser, masterEmp);
       if (!ue) {
         await MasterModel.upsertUsuarioEmpresa({
           iduser: u.iduser,
-          idempresa: u.idempresa || Number(env.DEFAULT_IDEMPRESA),
+          idempresa: masterEmp,
           permisos: pad01([], SIZE_PERMISOS),
           menu: pad01([], SIZE_MENU),
           modulos: '100', // Sistema=1, sin m\u00f3dulos activos a\u00fan
@@ -146,7 +174,7 @@ const MasterSyncService = {
 
   /** Lee estado de accesos master de un usuario. */
   async obtenerAccesos(iduser, idempresa) {
-    const empresa = idempresa || Number(env.DEFAULT_IDEMPRESA);
+    const empresa = await masterIdempresaDe(idempresa);
     const ue = await MasterModel.obtenerUsuarioEmpresa(iduser, empresa);
     return {
       habilitado: MasterModel.habilitado(),
@@ -163,14 +191,14 @@ const MasterSyncService = {
       e.status = 400;
       throw e;
     }
-    const empresa = idempresa || Number(env.DEFAULT_IDEMPRESA);
+    const empresa = await masterIdempresaDe(idempresa);
     const permisosStr = pad01(permisos || [], SIZE_PERMISOS);
     const menuArr = (menu || []).slice(0, SIZE_MENU);
     const menuStr = pad01(menuArr, SIZE_MENU);
     const modulos = calcularModulos(menuArr);
 
-    // Asegurar existencia en USUARIO de master
-    await this.syncUsuario(iduser, { ip });
+    // Asegurar existencia en USUARIO de master (con la misma empresa system operativa)
+    await this.syncUsuario(iduser, { ip, idempresa });
 
     await MasterModel.upsertUsuarioEmpresa({
       iduser,
