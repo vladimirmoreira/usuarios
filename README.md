@@ -312,10 +312,10 @@ TZ=America/Asuncion
 | Campo | Long. | Codificación |
 |---|---|---|
 | `USUARIOEMPRESA.PERMISOS` | 50 | `S/N` por posición (Permisos Generales). |
-| `USUARIOEMPRESA.MOVIMIENTOS` | 20 | `S/N`; el índice = valor `tipo` en `TIPOMOVIMIENTO`. |
+| `USUARIOEMPRESA.MOVIMIENTOS` | 20 | `0/1` por posición; el índice = valor `tipo` en `TIPOMOVIMIENTO`. |
 | `USUARIOEMPRESA.PERMISO_GG` | 50 | `S/N` por módulo (contabilidad/RRHH). |
-| `USUARIOEMPRESA.MENU_GG_2` | 100 | `S/N` PDV. |
-| `USUARIO_CONCEPTO.PERMISO_VARIOS` | 15 | **`'0' = elegido`**, **`'1' = no elegido`** (invertido). |
+| `USUARIOEMPRESA.MENU_GG_2` | 100 | `0/1` PDV; la posición = `idpermiso` del catálogo `TMP$USUARIO_PERMISOS_PDV` (ítem N → `menu_gg_2[N-1]`), **no** el `indice`. |
+| `USUARIO_CONCEPTO.PERMISO_VARIOS` | 15 | **`'1' = habilitado`**, **`'0' = no`** (por posición). |
 
 El **service** `permisos.service.js` expone `decodeSN/encodeSN`, `decode01/encode01`, `decodeConcepto/encodeConcepto`. **Nunca** manipular estos strings desde controladores ni desde el cliente.
 
@@ -690,7 +690,10 @@ Cada usuario tiene una fecha de caducidad opcional `USUARIO.HASTA_VIGENCIA` (TIM
 | `GET`    | `/api/roles/:idperfil/accesos` | Estado completo de la plantilla. |
 | `PUT`    | `/api/roles/:idperfil/{menu\|permisos-generales\|movimientos\|pdv\|permiso-gg\|conceptos\|sucursales\|depositos}` | Mismos payloads que `/accesos/:iduser/...`. |
 | `GET`    | `/api/roles/:idperfil/usuarios` | Usuarios activos del rol con `exclusion_permisos` y `documento`. |
+| `GET`    | `/api/roles/:idperfil/usuario-pdv` | Estado "Usuario PDV" del rol: `{ habilitado, idsucursal, idtipo_mesero }` (fila plantilla en `GG_MESERO`). |
 | `POST`   | `/api/roles/:idperfil/propagar` | Propaga permisos del rol. Body: `{ excluidos: string[] }`. Response: `{ propagados, excluidos, errores[], sin_documento[] }`. |
+
+> **Usuario PDV** (`POST`/`PUT /api/roles`, campos `usuario_pdv`, `idsucursal`, `idtipo_mesero`): al activarlo se crea/actualiza la fila plantilla del rol en `GG_MESERO` (BD `server`). Solo aplica a roles PDV; no se destilda desde acá (la baja va por el rol o sus usuarios).
 
 ### 7.5 Catálogos
 
@@ -699,6 +702,8 @@ Cada usuario tiene una fecha de caducidad opcional `USUARIO.HASTA_VIGENCIA` (TIM
 | `GET` | `/api/catalogos/perfiles` | `TIPO_USUARIO` + `Admin` sintético. |
 | `GET` | `/api/catalogos/operaciones` | Catálogo de 13 operaciones con descripción y efectos declarativos. |
 | `GET` | `/api/catalogos/sucursales` | `SUCURSAL WHERE estado=1`. |
+| `GET` | `/api/catalogos/sucursales-locales` | `SUCURSAL WHERE estado=1 AND local=1` (detecta `local`/`es_local` según FB 2.5/5). Combo Usuario PDV. |
+| `GET` | `/api/catalogos/tipos-mesero` | `GG_TIPO_MESERO WHERE idtipo_mesero IN (1,2,3)`. Combo Usuario PDV. |
 | `GET` | `/api/catalogos/depositos` | `DEPOSITO WHERE estado=1` (incluye `idsucursal`). |
 | `GET` | `/api/catalogos/talonarios` | `TALONARIO WHERE estado='A'` JOIN `SUCURSAL`. |
 | `GET` | `/api/catalogos/vendedores` | `VENDEDOR WHERE estado=1`. |

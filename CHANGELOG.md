@@ -7,6 +7,52 @@ y las fechas están en formato `AAAA-MM-DD` (zona `America/Asuncion`).
 
 ---
 
+## [No publicado] — 2026-07-13
+
+### Agregado — "Usuario PDV" a nivel de rol (`GG_MESERO`)
+
+- El editor de rol suma un check **"Usuario PDV"** con un acordeón (**Sucursal
+  local** + **Tipo de mesero**). Al activarlo se crea/actualiza la fila plantilla
+  del rol en `GG_MESERO` (BD `server`): `nombre='Perfil'`, `apellido=`descripción,
+  `estado=1`, `clave='$$$$$$'`, `externo=0`, más sucursal y tipo elegidos.
+- Una vez creada, el check queda **fijo** (no se destilda desde acá; la baja va por
+  el rol o sus usuarios); los combos sí se pueden editar.
+- Nuevos endpoints: `GET /roles/:idperfil/usuario-pdv`, `GET /catalogos/sucursales-locales`
+  (detecta columna `local`/`es_local` según Firebird 2.5/5) y `GET /catalogos/tipos-mesero`.
+- Nuevo modelo `ggMesero.model.js`.
+
+### Corregido
+
+- **Alta de usuario ya no devuelve 500 con el usuario grabado.** Los post-efectos
+  (auditoría, legajo, `GG_MESERO`) del alta unitaria pasan a **best-effort**: si
+  fallan, el alta igual responde éxito con `advertencias[]` y se loguea el detalle
+  (espejo de `altasBatch`).
+- **`idtipo_mesero` para roles PDV nuevos.** `insertarMesero` ya no depende del mapa
+  legacy `{7:3,8:1,10:1,6:3}` (solo roles viejos): cualquier rol `tipo_usuario.tipo=1`
+  hereda el `idtipo_mesero` configurado en "Usuario PDV" del rol → fallback mapa
+  legacy → default `1`. Nunca queda null.
+- **`USUARIOEMPRESA.MOVIMIENTOS`** se codificaba como `S/N`; es **`0/1`** por posición.
+  Marcar Inventario ahora guarda `1000…` (antes `SNNN…`). *Nota:* re-guardar los roles
+  cuyo MOVIMIENTOS se editó con el bug.
+- **`USUARIO_CONCEPTO.PERMISO_VARIOS`** estaba **invertido**: ahora `'1'=habilitado`,
+  `'0'=no` (antes `true→'0'`).
+- **PDV (`MENU_GG_2`)** se posicionaba por `indice`; debe posicionarse por
+  **`idpermiso`** (número de ítem legacy): ítem N → `menu_gg_2[N-1]`. El catálogo se
+  ordena por `idpermiso`.
+- **Menú de reportes malformado.** El app ahora **ignora** los `idmenu` con `__`
+  consecutivo (segmento idempresa vacío, p. ej. `mnuRpt__3`) y **deduplica** por
+  `idmenu` conservando el primero — en lectura, copia de alta y propagación (replica
+  cómo lo ignora el legacy). La limpieza de duplicados del legacy queda a cargo del operador.
+- **Propagación de rol**: el modal solo se ofrece si el rol **ya tiene usuarios**
+  asignados (un rol recién creado no lo pide).
+- **`rol.controller.actualizar`** descartaba `edicion_rol`: ahora se persiste al editar.
+
+### Cambiado
+
+- **Permisos globales por concepto** (Movimientos → Conceptos): el panel ya no
+  desaparece cuando no hay conceptos activos; queda **visible y deshabilitado** con
+  una guía, y se habilita al elegir conceptos.
+
 ## [No publicado] — 2026-07-10 (b)
 
 ### Agregado — Catálogos TMP$ de la BD master (Contab./RRHH)
