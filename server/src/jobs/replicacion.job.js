@@ -1,8 +1,8 @@
 'use strict';
 
-const cron = require('node-cron');
 const ReplicacionModel = require('../models/replicacion.model');
 const ReplicacionService = require('../services/replicacion.service');
+const ConfiguracionModel = require('../models/configuracion.model');
 const logger = require('../utils/logger');
 
 const { ESTADO } = ReplicacionModel;
@@ -60,27 +60,39 @@ async function drenar(limit = 20) {
   }
 }
 
-/**
- * Programa el drenado periódico de la cola. Actúa como RED DE SEGURIDAD (reintentos):
- * el procesamiento normal es inmediato al encolar (endpoint /replicacion/usuario y
- * enganche automático llaman a drenar() en el acto). Este cron solo reprocesa los
- * PENDIENTE que quedaron por un destino caído (VPN abajo).
- * Deshabilitar: ENABLE_REPLICACION_JOB=0. Frecuencia: REPLICACION_CRON (default cada 15 min).
- */
+// ── Loop auto-programado (intervalo DB-driven) ──────────────────────────────
+// Actúa como RED DE SEGURIDAD (reintentos): el procesamiento normal es inmediato al
+// encolar (el endpoint /replicacion/usuario y el enganche automático llaman a drenar()
+// en el acto). Este loop solo reprocesa los PENDIENTE que quedaron por un destino caído.
+// El intervalo sale de CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION (minutos) y se
+// RELEE en cada ciclo → cambiarlo desde la UI toma efecto sin reiniciar el server.
+
+let timer = null;
+let detenido = false;
+
+async function intervaloMs() {
+  const min = await ConfiguracionModel.temporizadorReplicacion().catch(() => 15);
+  return Math.max(1, Number(min) || 15) * 60 * 1000;
+}
+
+async function ciclo() {
+  await drenar();
+  if (detenido) return;
+  const ms = await intervaloMs();
+  timer = setTimeout(ciclo, ms);
+}
+
 function start() {
   if (process.env.ENABLE_REPLICACION_JOB === '0') {
     logger.info('[jobs] replicacion job DESHABILITADO (ENABLE_REPLICACION_JOB=0)');
     return null;
   }
-  const expr = process.env.REPLICACION_CRON || '*/15 * * * *'; // cada 15 min (red de seguridad)
-  if (!cron.validate(expr)) {
-    logger.warn({ expr }, '[jobs] expresión cron inválida para replicacion job');
-    return null;
-  }
-  const task = cron.schedule(expr, () => { drenar(); },
-    { timezone: process.env.TZ || 'America/Asuncion' });
-  logger.info({ expr }, '[jobs] replicacion job programado');
-  return task;
+  detenido = false;
+  intervaloMs().then((ms) => {
+    logger.info({ minutos: ms / 60000 }, '[jobs] replicacion job programado (intervalo DB-driven)');
+    timer = setTimeout(ciclo, ms); // primer disparo tras el intervalo (no al arranque)
+  });
+  return { stop: () => { detenido = true; if (timer) clearTimeout(timer); } };
 }
 
 module.exports = { start, drenar };

@@ -22,7 +22,7 @@ const emptyForm: CfgForm = {
   ip: '', server: '', sys_cfg: '', master: '', user_bd: '', clave: '',
   legajo: false, biometrico: false, gastronomia: false, complementario: false,
   contabilidad: false, talento_humano: false, crear_sin_rol: true,
-  clonar: false, replicar: false,
+  clonar: false, replicar: false, temporizador_replicacion: 15,
   maximo: null, ruta_archivo: null, version_nro: null, autorizado: null,
 };
 
@@ -38,6 +38,7 @@ const toForm = (r: Configuracion & { clave?: string }): CfgForm => ({
   crear_sin_rol:  (r.crear_sin_rol ?? 1) === 1,
   clonar:         (r.clonar ?? 0) === 1,
   replicar:       (r.replicar ?? 0) === 1,
+  temporizador_replicacion: r.temporizador_replicacion ?? 15,
 });
 
 const fromForm = (f: CfgForm) => {
@@ -53,6 +54,9 @@ const fromForm = (f: CfgForm) => {
     crear_sin_rol:  f.crear_sin_rol ? 1 : 0,
     clonar:         f.clonar ? 1 : 0,
     replicar:       f.replicar ? 1 : 0,
+    temporizador_replicacion:
+      f.temporizador_replicacion == null || f.temporizador_replicacion === ('' as any)
+        ? 15 : Number(f.temporizador_replicacion),
     maximo:         f.maximo === null || f.maximo === ('' as any) ? null : Number(f.maximo),
     // Omitir clave si está vacía (no cambiar la existente)
     ...(clave?.trim() ? { clave: clave.trim() } : {}),
@@ -551,6 +555,20 @@ export default function ConfiguracionPage() {
                   </label>
                 ))}
               </div>
+
+              {/* Temporizador del worker de replicación (minutos) — solo si Replicar activo */}
+              {form.replicar && (
+                <div className="max-w-xs">
+                  <label className="label">Temporizador de replicación (min)</label>
+                  <input className="input mt-1" type="number" min={1} max={1440}
+                    value={form.temporizador_replicacion ?? 15}
+                    onChange={set('temporizador_replicacion')} />
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Cada cuántos minutos el worker reintenta los envíos pendientes (destinos que
+                    estuvieron caídos). El envío normal es inmediato. Default 15.
+                  </p>
+                </div>
+              )}
 
               {/* Autorización */}
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 pt-2">Acceso a Configuración</p>

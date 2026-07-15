@@ -312,9 +312,11 @@ CREATE TABLE REPLICACION_COLA (
   `RH_PERSONA`/`RH_CARGO` del mesero (las anula si faltan). Lo omitido se reporta como `BLOQUEADO`.
 - **Worker:** `jobs/replicacion.job.js`. Es **red de seguridad de reintentos**: el procesamiento
   normal es inmediato al encolar (el endpoint `/replicacion/usuario` y el enganche automático llaman
-  a `drenar()` en el acto). El cron (`REPLICACION_CRON`, default **cada 15 min**;
-  `ENABLE_REPLICACION_JOB=0` lo apaga) solo reprocesa los PENDIENTE que quedaron por un destino caído
+  a `drenar()` en el acto). El worker solo reprocesa los PENDIENTE que quedaron por un destino caído
   (VPN abajo). Error de conexión → sigue PENDIENTE y reintenta; error de datos → ERROR.
+  El intervalo es un **loop auto-programado** que relee `CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION`
+  (minutos, default 15, clamp [1,1440]) **en cada ciclo** → editable desde Configuración y toma efecto
+  sin reiniciar. `ENABLE_REPLICACION_JOB=0` lo apaga.
 - **Probado** contra BD reales (central remota → 3 `.fdb` destino locales): `USUARIO`,
   `USUARIOEMPRESA`, `USUARIO_SUCURSAL/CONCEPTO` y `GG_MESERO` con offset de sucursal verificado.
 - **Pendiente (etapa 2b):** escritura a `MASTER_BD` (usuario/usuarioempresa RRHH-Contab);

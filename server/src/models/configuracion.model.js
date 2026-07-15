@@ -10,6 +10,7 @@ const COLS = `ip, server, SYSTEM_BD AS SYS_CFG, MASTER_BD AS MASTER, user_bd, cl
               COALESCE(crear_sin_rol, 1) AS crear_sin_rol,
               COALESCE(clonar, 0) AS clonar,
               COALESCE(replicar, 0) AS replicar,
+              COALESCE(temporizador_replicacion, 15) AS temporizador_replicacion,
               metadata_ejecutado`;
 
 const ConfiguracionModel = {
@@ -34,8 +35,8 @@ const ConfiguracionModel = {
             legajo, biometrico, gastronomia, maximo,
             complementario, ruta_archivo, version_nro, autorizado,
             contabilidad, talento_humano, dias_inactividad, crear_sin_rol,
-            clonar, replicar, metadata_ejecutado)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            clonar, replicar, temporizador_replicacion, metadata_ejecutado)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           data.ip, data.server, data.sys_cfg, data.master, data.user_bd, data.clave,
           data.legajo ?? 0, data.biometrico ?? 0, data.gastronomia ?? 0,
@@ -43,7 +44,8 @@ const ConfiguracionModel = {
           data.ruta_archivo ?? null, data.version_nro ?? null, data.autorizado ?? null,
           data.contabilidad ?? 0, data.talento_humano ?? 0,
           data.dias_inactividad ?? 90, data.crear_sin_rol ?? 1,
-          data.clonar ?? 0, data.replicar ?? 0, data.metadata_ejecutado ?? 0,
+          data.clonar ?? 0, data.replicar ?? 0, data.temporizador_replicacion ?? 15,
+          data.metadata_ejecutado ?? 0,
         ],
       );
     });
@@ -61,6 +63,7 @@ const ConfiguracionModel = {
         dias_inactividad: 'dias_inactividad',
         crear_sin_rol: 'crear_sin_rol',
         clonar: 'clonar', replicar: 'replicar',
+        temporizador_replicacion: 'temporizador_replicacion',
         metadata_ejecutado: 'metadata_ejecutado',
       };
       const sets = [];
@@ -131,6 +134,22 @@ const ConfiguracionModel = {
       );
       return Number(rows[0]?.dias) || 90;
     } catch (_) { return 90; }
+  },
+
+  /**
+   * Minutos entre ciclos del worker de replicación. Se toma la primera fila.
+   * Clamp [1, 1440]. Default 15. Tolera que la columna aún no exista.
+   */
+  async temporizadorReplicacion() {
+    try {
+      const rows = await query(
+        'server',
+        `SELECT FIRST 1 COALESCE(temporizador_replicacion, 15) AS min
+           FROM configuracion_usuario ORDER BY ip`,
+      );
+      const n = Number(rows[0]?.min) || 15;
+      return Math.min(1440, Math.max(1, n));
+    } catch (_) { return 15; }
   },
 };
 

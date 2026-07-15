@@ -427,6 +427,7 @@ export type Configuracion = {
   crear_sin_rol:   number | null;
   clonar:          number | null;
   replicar:        number | null;
+  temporizador_replicacion: number | null;
   metadata_ejecutado?: number | null;
 };
 

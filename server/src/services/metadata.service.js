@@ -345,6 +345,9 @@ async function migrarDDL() {
     // REPLICAR: 1 = habilita "Replicar usuario a BD destino (sucursal)" — motor de replicación.
     `ALTER TABLE configuracion_usuario ADD CLONAR   SMALLINT DEFAULT 0`,
     `ALTER TABLE configuracion_usuario ADD REPLICAR SMALLINT DEFAULT 0`,
+    // TEMPORIZADOR_REPLICACION: minutos entre ciclos del worker de replicación (red de
+    // seguridad de reintentos). Editable desde Configuración. Default 15.
+    `ALTER TABLE configuracion_usuario ADD TEMPORIZADOR_REPLICACION INTEGER DEFAULT 15`,
     // TIPOMOVIMIENTO: campo ESTADO requerido por obtenerConceptos (WHERE estado = 1).
     // Si la tabla ya existía sin la columna, se agrega con default 1.
     `ALTER TABLE tipomovimiento ADD ESTADO SMALLINT DEFAULT 1`,
