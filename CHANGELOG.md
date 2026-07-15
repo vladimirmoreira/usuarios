@@ -7,6 +7,59 @@ y las fechas están en formato `AAAA-MM-DD` (zona `America/Asuncion`).
 
 ---
 
+## [No publicado] — 2026-07-15
+
+### Agregado — Módulo de Replicación de usuarios a sucursales
+
+Reemplaza el mecanismo legacy `PCD_OPERACIONES` (op.10 "Migración de Datos") por un
+motor en Node con cola resiliente. **Desplegado en producción.**
+
+- **Destinos** (`CONFIGURACION_USUARIO_REPLICA`): una fila por local
+  (`IDSUCURSAL` pk = offset, `ESTADO`, `ORDEN`, `HOST_SERVER`, `USER_BD`, `CLAVE_BD`,
+  `SERVER_BD`, `SYSTEM_BD`, `MASTER_BD`). `MASTER_BD` NULL = ese local no replica a master.
+- **Cola outbox** (`REPLICACION_COLA` + `GEN_REPLICACION_COLA`): estados
+  `0` PENDIENTE · `1` PROCESANDO · `2` ENVIADO · `3` ERROR · `4` BLOQUEADO.
+- **Motor** `services/replicacion.service.js`: lee de central (pools) y escribe a cada BD
+  destino por conexión Firebird **ad-hoc** (`config/firebird.js → attachExternal`),
+  transacción por BD. **Upsert genérico con introspección** (reemplaza `PCD_GENERA_REPLICA`):
+  intersección de columnas origen∩destino + coacción de NOT NULL, tolera esquemas distintos.
+  Rutea **SYSTEM_BD** (usuario/usuarioempresa/menu_general), **SERVER_BD** (sucursal/deposito/
+  deposito1/concepto/gg_mesero) y **MASTER_BD** (usuario/usuarioempresa RRHH-Contab).
+- **Transformaciones:** `ORDEN` recalculado (sucursal/depósito propios del destino = orden 1);
+  `GG_MESERO.IDSUCURSAL` = `IDSUCURSAL` del destino (offset por local), preservando `IDMESERO`.
+- **Guardas FK** (nunca escribe sin ratificar): `SUCURSAL`/`DEPOSITO`, `RH_PERSONA`/`RH_CARGO`
+  del mesero, y en `USUARIO_CONCEPTO` el `TIPOMOVIMIENTO` (omite el concepto si falta) + FKs
+  opcionales (talonario/vendedor/rh_persona/planventa/condicion → anula; `<=0` = sin referencia).
+  Lo omitido/anulado se reporta como `BLOQUEADO`.
+- **Worker** `jobs/replicacion.job.js`: red de seguridad de reintentos (el envío normal es
+  inmediato al encolar). Loop auto-programado que relee `CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION`
+  (min, default 15) en cada ciclo → editable desde la UI sin reiniciar. VPN caída → job sigue
+  PENDIENTE y reintenta. Purga los ENVIADO fuera de `RETENCION_REPLICACION_HORAS` (default 48).
+- **Dedupe:** `encolar` no duplica si ya hay un PENDIENTE para (usuario, destino) — el worker lee
+  en vivo, un pendiente basta.
+- **Menú Replicación** (gateado por flag `REPLICAR` + `AUTORIZADO`): grilla de estado por destino
+  (Encolado/Procesando/Enviado/Error/Bloqueado) + reintentos. Botón **"Replicar"** en el editor de
+  usuario. Endpoints `GET /replicacion/estado`, `/cola`, `POST /replicacion/cola/:id/reintentar`,
+  `/reintentar-destino`, `/usuario/:iduser`.
+
+### Agregado — Configuración: flags y parámetros de replicación
+
+- `CONFIGURACION_USUARIO`: `CLONAR`/`REPLICAR` (smallint 1/0), `TEMPORIZADOR_REPLICACION`
+  (min, default 15), `RETENCION_REPLICACION_HORAS` (horas, default 48). Todos en `migrarDDL`,
+  editor de Configuración y `GET /configuracion/flags`.
+- Botón **Clonar** (accesos a otra empresa) del editor de usuario ahora se muestra solo si
+  `CLONAR=1`; botón **Replicar** solo si `REPLICAR=1`.
+
+### Pendiente — Replicación etapa 2b (tanda B)
+
+- Roles como dependencia previa garantizada (upsert de `TIPO_USUARIO` antes del usuario).
+- Enganche automático en alta/baja/permisos (hoy solo botón manual).
+- Propagar rol: recordatorio en la cola + botón "Replicar" con barra de progreso y throttling.
+- Cascada profunda del legajo (`RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`).
+- UX: renombrar/tooltip en la columna "Master" del menú (es indicador de config, no de éxito).
+
+---
+
 ## [No publicado] — 2026-07-13
 
 ### Agregado — Login multi-empresa (2 fases) + empresa MASTER
