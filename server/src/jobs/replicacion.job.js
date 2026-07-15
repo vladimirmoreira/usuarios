@@ -77,6 +77,11 @@ async function intervaloMs() {
 
 async function ciclo() {
   await drenar();
+  // Purga de ENVIADO fuera de la ventana de retención (best-effort).
+  try {
+    const horas = await ConfiguracionModel.retencionReplicacionHoras();
+    await ReplicacionModel.purgarEnviados(horas);
+  } catch (e) { logger.warn({ err: e?.message }, '[jobs] replicacion: purga falló'); }
   if (detenido) return;
   const ms = await intervaloMs();
   timer = setTimeout(ciclo, ms);

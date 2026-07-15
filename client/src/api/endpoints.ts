@@ -428,6 +428,7 @@ export type Configuracion = {
   clonar:          number | null;
   replicar:        number | null;
   temporizador_replicacion: number | null;
+  retencion_replicacion_horas: number | null;
   metadata_ejecutado?: number | null;
 };
 

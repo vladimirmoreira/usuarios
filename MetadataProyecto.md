@@ -214,6 +214,8 @@ CREATE TABLE CONFIGURACION_USUARIO (
     CREAR_SIN_ROL      SMALLINT     DEFAULT 1,
     CLONAR             SMALLINT     DEFAULT 0,
     REPLICAR           SMALLINT     DEFAULT 0,
+    TEMPORIZADOR_REPLICACION    INTEGER DEFAULT 15,   -- min entre ciclos del worker
+    RETENCION_REPLICACION_HORAS INTEGER DEFAULT 48,   -- horas que se guardan los ENVIADO
     METADATA_EJECUTADO SMALLINT     DEFAULT 0 NOT NULL,
     CONSTRAINT PK_CFG_USR PRIMARY KEY (IP)
 );
@@ -308,8 +310,18 @@ CREATE TABLE REPLICACION_COLA (
   clon destino tenga un esquema más viejo. Nunca escribe columnas inexistentes.
 - **Transformaciones:** `ORDEN` recalculado (sucursal/depósito propios del destino = orden 1) y
   `GG_MESERO.IDSUCURSAL` = `IDSUCURSAL` del destino (offset por local). `IDMESERO` se preserva.
-- **Guardas FK:** verifica `SUCURSAL`/`DEPOSITO` antes de insertar (omite las inexistentes) y
-  `RH_PERSONA`/`RH_CARGO` del mesero (las anula si faltan). Lo omitido se reporta como `BLOQUEADO`.
+- **Guardas FK:** verifica `SUCURSAL`/`DEPOSITO` antes de insertar (omite las inexistentes),
+  `RH_PERSONA`/`RH_CARGO` del mesero (las anula si faltan), y en `USUARIO_CONCEPTO`:
+  `TIPOMOVIMIENTO` (FK dura → omite el concepto si falta) + FKs opcionales
+  (talonario/vendedor/rh_persona/planventa/condicion → anula si el target no existe; `<=0` = sin
+  referencia). Lo omitido/anulado se reporta como `BLOQUEADO`.
+- **MASTER_BD:** `escribirMaster()` replica `USUARIO`+`USUARIOEMPRESA` de RRHH/Contab (solo si el
+  usuario existe en la master central; copia master→master verbatim, sin traducir idempresa).
+- **Dedupe:** `encolar` no crea un job si ya hay uno PENDIENTE para ese (usuario, destino) — el worker
+  lee en vivo, un pendiente basta.
+- **Retención:** el worker purga los ENVIADO cuya `fecha_proc` supera
+  `CONFIGURACION_USUARIO.RETENCION_REPLICACION_HORAS` (default 48, clamp [1,8760], editable desde
+  Configuración). ERROR/BLOQUEADO nunca se purgan. El histórico permanente vive en `HISTORIAL_USUARIO`.
 - **Worker:** `jobs/replicacion.job.js`. Es **red de seguridad de reintentos**: el procesamiento
   normal es inmediato al encolar (el endpoint `/replicacion/usuario` y el enganche automático llaman
   a `drenar()` en el acto). El worker solo reprocesa los PENDIENTE que quedaron por un destino caído
@@ -317,12 +329,14 @@ CREATE TABLE REPLICACION_COLA (
   El intervalo es un **loop auto-programado** que relee `CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION`
   (minutos, default 15, clamp [1,1440]) **en cada ciclo** → editable desde Configuración y toma efecto
   sin reiniciar. `ENABLE_REPLICACION_JOB=0` lo apaga.
-- **Probado** contra BD reales (central remota → 3 `.fdb` destino locales): `USUARIO`,
-  `USUARIOEMPRESA`, `USUARIO_SUCURSAL/CONCEPTO` y `GG_MESERO` con offset de sucursal verificado.
-- **Pendiente (etapa 2b):** escritura a `MASTER_BD` (usuario/usuarioempresa RRHH-Contab);
-  enganche automático en alta/baja/permisos (hoy sólo botón manual "Replicar" + endpoint);
-  cascada profunda de dependencias `RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`
-  (hoy: si falta la dependencia se anula/omite y se marca BLOQUEADO, en vez de replicarla).
+- **Probado** contra BD reales (central remota → 3 `.fdb` destino locales): SYSTEM (`USUARIO`,
+  `USUARIOEMPRESA`), SERVER (`USUARIO_SUCURSAL/DEPOSITO/DEPOSITO1/CONCEPTO`, `GG_MESERO` con offset)
+  y MASTER (`USUARIO`, `USUARIOEMPRESA`) verificados con el usuario `LARCE`.
+- **Pendiente (etapa 2b, tanda B):** roles como dependencia previa garantizada (upsert de
+  `TIPO_USUARIO` del usuario antes de escribirlo); enganche automático en alta/baja/permisos (hoy
+  sólo botón manual "Replicar" + endpoint); flujo de **propagar rol** (recordatorio en la cola +
+  botón "Replicar" con barra de progreso y throttling); cascada profunda de dependencias del legajo
+  (`RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`).
 
 #### `HISTORIAL_USUARIO`
 

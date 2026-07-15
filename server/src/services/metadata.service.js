@@ -348,6 +348,9 @@ async function migrarDDL() {
     // TEMPORIZADOR_REPLICACION: minutos entre ciclos del worker de replicación (red de
     // seguridad de reintentos). Editable desde Configuración. Default 15.
     `ALTER TABLE configuracion_usuario ADD TEMPORIZADOR_REPLICACION INTEGER DEFAULT 15`,
+    // RETENCION_REPLICACION_HORAS: horas que se conservan los jobs ENVIADO en la cola antes
+    // de purgarlos (los ERROR/BLOQUEADO no se purgan). Editable desde Configuración. Default 48.
+    `ALTER TABLE configuracion_usuario ADD RETENCION_REPLICACION_HORAS INTEGER DEFAULT 48`,
     // TIPOMOVIMIENTO: campo ESTADO requerido por obtenerConceptos (WHERE estado = 1).
     // Si la tabla ya existía sin la columna, se agrega con default 1.
     `ALTER TABLE tipomovimiento ADD ESTADO SMALLINT DEFAULT 1`,

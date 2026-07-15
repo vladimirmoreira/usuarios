@@ -11,6 +11,7 @@ const COLS = `ip, server, SYSTEM_BD AS SYS_CFG, MASTER_BD AS MASTER, user_bd, cl
               COALESCE(clonar, 0) AS clonar,
               COALESCE(replicar, 0) AS replicar,
               COALESCE(temporizador_replicacion, 15) AS temporizador_replicacion,
+              COALESCE(retencion_replicacion_horas, 48) AS retencion_replicacion_horas,
               metadata_ejecutado`;
 
 const ConfiguracionModel = {
@@ -35,8 +36,9 @@ const ConfiguracionModel = {
             legajo, biometrico, gastronomia, maximo,
             complementario, ruta_archivo, version_nro, autorizado,
             contabilidad, talento_humano, dias_inactividad, crear_sin_rol,
-            clonar, replicar, temporizador_replicacion, metadata_ejecutado)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            clonar, replicar, temporizador_replicacion, retencion_replicacion_horas,
+            metadata_ejecutado)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           data.ip, data.server, data.sys_cfg, data.master, data.user_bd, data.clave,
           data.legajo ?? 0, data.biometrico ?? 0, data.gastronomia ?? 0,
@@ -45,7 +47,7 @@ const ConfiguracionModel = {
           data.contabilidad ?? 0, data.talento_humano ?? 0,
           data.dias_inactividad ?? 90, data.crear_sin_rol ?? 1,
           data.clonar ?? 0, data.replicar ?? 0, data.temporizador_replicacion ?? 15,
-          data.metadata_ejecutado ?? 0,
+          data.retencion_replicacion_horas ?? 48, data.metadata_ejecutado ?? 0,
         ],
       );
     });
@@ -64,6 +66,7 @@ const ConfiguracionModel = {
         crear_sin_rol: 'crear_sin_rol',
         clonar: 'clonar', replicar: 'replicar',
         temporizador_replicacion: 'temporizador_replicacion',
+        retencion_replicacion_horas: 'retencion_replicacion_horas',
         metadata_ejecutado: 'metadata_ejecutado',
       };
       const sets = [];
@@ -150,6 +153,22 @@ const ConfiguracionModel = {
       const n = Number(rows[0]?.min) || 15;
       return Math.min(1440, Math.max(1, n));
     } catch (_) { return 15; }
+  },
+
+  /**
+   * Horas de retención de los jobs ENVIADO en la cola de replicación.
+   * Clamp [1, 8760] (1 año). Default 48. Tolera que la columna aún no exista.
+   */
+  async retencionReplicacionHoras() {
+    try {
+      const rows = await query(
+        'server',
+        `SELECT FIRST 1 COALESCE(retencion_replicacion_horas, 48) AS horas
+           FROM configuracion_usuario ORDER BY ip`,
+      );
+      const n = Number(rows[0]?.horas) || 48;
+      return Math.min(8760, Math.max(1, n));
+    } catch (_) { return 48; }
   },
 };
 

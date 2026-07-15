@@ -22,7 +22,7 @@ const emptyForm: CfgForm = {
   ip: '', server: '', sys_cfg: '', master: '', user_bd: '', clave: '',
   legajo: false, biometrico: false, gastronomia: false, complementario: false,
   contabilidad: false, talento_humano: false, crear_sin_rol: true,
-  clonar: false, replicar: false, temporizador_replicacion: 15,
+  clonar: false, replicar: false, temporizador_replicacion: 15, retencion_replicacion_horas: 48,
   maximo: null, ruta_archivo: null, version_nro: null, autorizado: null,
 };
 
@@ -39,6 +39,7 @@ const toForm = (r: Configuracion & { clave?: string }): CfgForm => ({
   clonar:         (r.clonar ?? 0) === 1,
   replicar:       (r.replicar ?? 0) === 1,
   temporizador_replicacion: r.temporizador_replicacion ?? 15,
+  retencion_replicacion_horas: r.retencion_replicacion_horas ?? 48,
 });
 
 const fromForm = (f: CfgForm) => {
@@ -57,6 +58,9 @@ const fromForm = (f: CfgForm) => {
     temporizador_replicacion:
       f.temporizador_replicacion == null || f.temporizador_replicacion === ('' as any)
         ? 15 : Number(f.temporizador_replicacion),
+    retencion_replicacion_horas:
+      f.retencion_replicacion_horas == null || f.retencion_replicacion_horas === ('' as any)
+        ? 48 : Number(f.retencion_replicacion_horas),
     maximo:         f.maximo === null || f.maximo === ('' as any) ? null : Number(f.maximo),
     // Omitir clave si está vacía (no cambiar la existente)
     ...(clave?.trim() ? { clave: clave.trim() } : {}),
@@ -556,17 +560,29 @@ export default function ConfiguracionPage() {
                 ))}
               </div>
 
-              {/* Temporizador del worker de replicación (minutos) — solo si Replicar activo */}
+              {/* Parámetros del worker de replicación — solo si Replicar activo */}
               {form.replicar && (
-                <div className="max-w-xs">
-                  <label className="label">Temporizador de replicación (min)</label>
-                  <input className="input mt-1" type="number" min={1} max={1440}
-                    value={form.temporizador_replicacion ?? 15}
-                    onChange={set('temporizador_replicacion')} />
-                  <p className="mt-1 text-xs text-zinc-400">
-                    Cada cuántos minutos el worker reintenta los envíos pendientes (destinos que
-                    estuvieron caídos). El envío normal es inmediato. Default 15.
-                  </p>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+                  <div>
+                    <label className="label">Temporizador de replicación (min)</label>
+                    <input className="input mt-1" type="number" min={1} max={1440}
+                      value={form.temporizador_replicacion ?? 15}
+                      onChange={set('temporizador_replicacion')} />
+                    <p className="mt-1 text-xs text-zinc-400">
+                      Cada cuántos minutos el worker reintenta los envíos pendientes. El envío
+                      normal es inmediato. Default 15.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="label">Retención de exitosos (horas)</label>
+                    <input className="input mt-1" type="number" min={1} max={8760}
+                      value={form.retencion_replicacion_horas ?? 48}
+                      onChange={set('retencion_replicacion_horas')} />
+                    <p className="mt-1 text-xs text-zinc-400">
+                      Horas que se muestran los envíos ENVIADO antes de purgarlos de la lista.
+                      Los ERROR/BLOQUEADO se mantienen. Default 48.
+                    </p>
+                  </div>
                 </div>
               )}
 

@@ -144,9 +144,21 @@ const ReplicacionModel = {
       idsucursal != null ? [idsucursal] : [],
     );
     if (!destinos.length) return 0;
+
+    // Dedupe: no encolar si ya hay un job PENDIENTE para ese (usuario, destino).
+    // El worker lee los datos EN VIVO al procesar, así que un pendiente basta aunque
+    // el usuario se edite N veces antes de drenar.
+    const pend = await query(
+      'server',
+      `SELECT idsucursal FROM replicacion_cola WHERE iduser = ? AND estado = ?`,
+      [iduser, ESTADO.PENDIENTE],
+    );
+    const yaEnCola = new Set(pend.map((p) => Number(p.idsucursal)));
+    const objetivos = destinos.filter((d) => !yaEnCola.has(Number(d.idsucursal)));
+    if (!objetivos.length) return 0;
     const payloadStr = payload == null ? null : JSON.stringify(payload);
     await transaction('server', async (tx) => {
-      for (const d of destinos) {
+      for (const d of objetivos) {
         await tx.query(
           `INSERT INTO replicacion_cola
              (id, iduser, idsucursal, operacion, payload, estado, intentos, fecha_alta)
@@ -155,7 +167,23 @@ const ReplicacionModel = {
         );
       }
     });
-    return destinos.length;
+    return objetivos.length;
+  },
+
+  /**
+   * Purga los jobs ENVIADO cuya fecha_proc supera la ventana de retención (horas).
+   * Los ERROR/BLOQUEADO nunca se purgan. Devuelve nada (best-effort).
+   */
+  async purgarEnviados(horas = 48) {
+    const h = Math.min(8760, Math.max(1, Number(horas) || 48));
+    // orgonita_server es dialect 3 → usar DATEADD (la resta timestamp-número no aplica).
+    return query(
+      'server',
+      `DELETE FROM replicacion_cola
+        WHERE estado = ? AND fecha_proc IS NOT NULL
+          AND fecha_proc < DATEADD(? HOUR TO CURRENT_TIMESTAMP)`,
+      [ESTADO.ENVIADO, -h],
+    );
   },
 };
 

@@ -269,9 +269,27 @@ async function escribirServer(destino, data) {
       }
 
       // Conceptos: sin PK → delete+insert (intersección de columnas).
+      // Guarda FK: idtipomovimiento debe existir en destino (FK dura). Los FK opcionales
+      // (talonario/vendedor/persona/planventa/condicion) se anulan si su target no existe.
+      const FK_OPC = [
+        ['idtalonario', 'talonario', 'idtalonario'],
+        ['idvendedor', 'vendedor', 'idvendedor'],
+        ['idpersona', 'rh_persona', 'idpersona'],
+        ['idplanventa', 'planventa', 'idplanventa'],
+        ['idcondicion', 'condicion', 'idcondicion'],
+      ];
       await tx.query('DELETE FROM usuario_concepto WHERE iduser = ?', [iduser]);
       for (const cRaw of data.conceptos) {
+        const tmOk = await tx.query('SELECT 1 FROM tipomovimiento WHERE idtipomovimiento = ?', [cRaw.idtipomovimiento]);
+        if (!tmOk.length) { bloqueos.push(`concepto: tipomovimiento ${cRaw.idtipomovimiento} inexistente`); continue; }
         const c = prepararFila(cRaw, cCpt);
+        for (const [campo, tabla, pkcol] of FK_OPC) {
+          const val = c[campo];
+          if (val == null) continue;
+          if (Number(val) <= 0) { c[campo] = null; continue; } // 0 = centinela "sin referencia"
+          const ok = await tx.query(`SELECT 1 FROM ${tabla} WHERE ${pkcol} = ?`, [val]).catch(() => [{}]);
+          if (!ok.length) { bloqueos.push(`concepto tm${cRaw.idtipomovimiento}: ${campo} ${val} inexistente → null`); c[campo] = null; }
+        }
         const cols = Object.keys(c);
         await tx.query(
           `INSERT INTO usuario_concepto (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
@@ -295,6 +313,35 @@ async function escribirServer(destino, data) {
       return r;
     });
     return { ...res, bloqueos };
+  } finally {
+    await conn.detach();
+  }
+}
+
+async function escribirMaster(destino, iduser) {
+  if (!destino.master_bd || !destino.master_bd.trim()) return { skipped: 'sin-master' };
+  // Solo si el usuario tiene registro en la BD master central (módulo RRHH/Contab).
+  const uMaster = await leerFila('master', 'USUARIO', 'idusuario', iduser);
+  if (!uMaster) return { skipped: 'usuario-sin-master' };
+
+  const ueCols = await nonBlobCols('master', 'USUARIOEMPRESA');
+  const ueMaster = await leerFilas(
+    'master',
+    `SELECT ${ueCols.join(', ')} FROM usuarioempresa WHERE idusuario = ?`, [iduser]);
+
+  const conn = await attachExternal(optsDestino(destino, destino.master_bd));
+  try {
+    const cU = await metaDeConn(conn, 'USUARIO');
+    const cUE = await metaDeConn(conn, 'USUARIOEMPRESA');
+    return await conn.transaction(async (tx) => {
+      const r = { usuario: null, usuarioempresa: 0 };
+      r.usuario = await upsert(tx, 'USUARIO', prepararFila(uMaster, cU), ['IDUSUARIO']);
+      for (const ue of ueMaster) {
+        await upsert(tx, 'USUARIOEMPRESA', prepararFila(ue, cUE), ['IDEMPRESA', 'IDUSUARIO']);
+        r.usuarioempresa++;
+      }
+      return r;
+    });
   } finally {
     await conn.detach();
   }
@@ -325,8 +372,7 @@ async function replicarUsuario(idsucursal, iduser) {
 
   const system = await escribirSystem(destino, data);
   const server = await escribirServer(destino, data);
-  // MASTER_BD: pendiente etapa 2b (usuario/usuarioempresa RRHH-Contab).
-  const master = destino.master_bd && destino.master_bd.trim() ? 'pendiente-2b' : 'sin-master';
+  const master = await escribirMaster(destino, iduser);
 
   const bloqueos = server.bloqueos || [];
   logger.info({ iduser, idsucursal, system, server, master }, 'replicarUsuario');
