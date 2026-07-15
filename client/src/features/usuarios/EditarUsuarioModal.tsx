@@ -327,6 +327,8 @@ export default function EditarUsuarioModal({
               </div>
 
               {/* Clonar accesos a otra empresa (celda libre al lado de Vigencia) */}
+              {/* Solo visible si Configuración tiene el flag CLONAR activo. */}
+              {flagsQ.data?.clonar && (
               <div>
                 <label className="label">Clonar accesos a empresa</label>
                 <div className="mt-1 flex gap-2">
@@ -354,6 +356,7 @@ export default function EditarUsuarioModal({
                 </div>
                 <p className="mt-0.5 text-xs text-slate-400">Copia permisos/menú (no sucursal/depósitos). No sobrescribe si ya existe.</p>
               </div>
+              )}
 
               {/* Sucursal actual (read-only) */}
               <div className="col-span-2">
