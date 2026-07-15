@@ -19,8 +19,10 @@ const ESTADO_LABEL = {
   4: 'BLOQUEADO',
 };
 
-const DEST_COLS = `idsucursal, nombre, servidor, server_bd, system_bd, master_bd,
-                   user_bd, COALESCE(orden, 0) AS orden, COALESCE(estado, 1) AS estado`;
+// Columnas reales de CONFIGURACION_USUARIO_REPLICA (dialect 1: SERVER/SYSTEM/MASTER
+// están marcadas como reservadas; se referencian con alias *_bd para el lado JS).
+const DEST_COLS = `idsucursal, ip, server AS server_bd, system AS system_bd,
+                   master AS master_bd, COALESCE(orden, 0) AS orden, estado`;
 
 const ReplicacionModel = {
   ESTADO,

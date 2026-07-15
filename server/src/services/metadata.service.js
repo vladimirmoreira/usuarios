@@ -352,30 +352,21 @@ async function migrarDDL() {
     // ── Motor de Replicación (destinos + cola) ──────────────────────────────
     // CONFIGURACION_USUARIO_REPLICA: una fila por local destino (sucursal).
     // PK = IDSUCURSAL "base" del destino (offset para ORDEN y GG_MESERO.IDSUCURSAL).
-    // MASTER_BD NULL = ese destino no replica a la BD master. SERVIDOR = host/IP (VPN).
+    // Esquema alineado 1:1 con la tabla real del proyecto (reemplaza RDB$RPL_DESTINO):
+    //   SERVER/SYSTEM/MASTER = rutas/alias de cada BD destino (MASTER NULL = no replica a master).
+    //   IP = host del destino (VPN). Credenciales: se reusan las de CONFIGURACION_USUARIO.
+    // ⚠ dialect 1: SYSTEM/MASTER están marcadas como reservadas; la tabla ya existe con esos
+    //   nombres, así que este CREATE se ignora ("already exists"). Solo aplica en instalación nueva.
     `CREATE TABLE configuracion_usuario_replica (
-       IDSUCURSAL  INTEGER      NOT NULL,
-       NOMBRE      VARCHAR(60),
-       SERVIDOR    VARCHAR(60),
-       SERVER_BD   VARCHAR(100),
-       SYSTEM_BD   VARCHAR(100),
-       MASTER_BD   VARCHAR(100),
-       USER_BD     VARCHAR(20),
-       CLAVE       VARCHAR(60),
-       ORDEN       INTEGER      DEFAULT 0,
-       ESTADO      SMALLINT     DEFAULT 1,
+       IDSUCURSAL INTEGER      NOT NULL,
+       SERVER     VARCHAR(100),
+       SYSTEM     VARCHAR(100),
+       MASTER     VARCHAR(100),
+       ESTADO     SMALLINT     NOT NULL,
+       ORDEN      INTEGER,
+       IP         VARCHAR(15),
        CONSTRAINT PK_CFG_USR_REPL PRIMARY KEY (IDSUCURSAL)
      )`,
-    // ALTERs idempotentes: si la tabla ya existía (creada a mano) sin estas columnas.
-    `ALTER TABLE configuracion_usuario_replica ADD NOMBRE    VARCHAR(60)`,
-    `ALTER TABLE configuracion_usuario_replica ADD SERVIDOR  VARCHAR(60)`,
-    `ALTER TABLE configuracion_usuario_replica ADD SERVER_BD VARCHAR(100)`,
-    `ALTER TABLE configuracion_usuario_replica ADD SYSTEM_BD VARCHAR(100)`,
-    `ALTER TABLE configuracion_usuario_replica ADD MASTER_BD VARCHAR(100)`,
-    `ALTER TABLE configuracion_usuario_replica ADD USER_BD   VARCHAR(20)`,
-    `ALTER TABLE configuracion_usuario_replica ADD CLAVE     VARCHAR(60)`,
-    `ALTER TABLE configuracion_usuario_replica ADD ORDEN     INTEGER  DEFAULT 0`,
-    `ALTER TABLE configuracion_usuario_replica ADD ESTADO    SMALLINT DEFAULT 1`,
 
     // REPLICACION_COLA: outbox. Un job por (usuario, destino, operación).
     // ESTADO: 0 PENDIENTE · 1 PROCESANDO · 2 ENVIADO · 3 ERROR · 4 BLOQUEADO (falta dependencia).

@@ -29,8 +29,9 @@ const ReplicacionController = {
         const c = porDest.get(Number(d.idsucursal)) || {};
         return {
           idsucursal: Number(d.idsucursal),
-          nombre: d.nombre?.trim() || `Sucursal ${d.idsucursal}`,
-          servidor: d.servidor?.trim() || null,
+          // La tabla no tiene NOMBRE: se etiqueta por id (+ IP si está).
+          nombre: `Sucursal ${d.idsucursal}`,
+          servidor: d.ip?.trim() || null,
           replica_master: !!(d.master_bd && String(d.master_bd).trim()),
           activo: Number(d.estado) === 1,
           pendiente: c[ESTADO.PENDIENTE] || 0,

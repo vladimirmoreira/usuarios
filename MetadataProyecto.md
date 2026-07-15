@@ -248,19 +248,24 @@ destino ese id es la sucursal propia (ORDEN 1) y desplaza `GG_MESERO.IDSUCURSAL`
 
 ```sql
 CREATE TABLE CONFIGURACION_USUARIO_REPLICA (
-    IDSUCURSAL  INTEGER      NOT NULL,   -- PK: idsucursal base del destino (offset)
-    NOMBRE      VARCHAR(60),             -- etiqueta del local
-    SERVIDOR    VARCHAR(60),             -- host/IP del destino (VPN)
-    SERVER_BD   VARCHAR(100),            -- ruta/alias BD server_ destino
-    SYSTEM_BD   VARCHAR(100),            -- ruta/alias BD system_ destino
-    MASTER_BD   VARCHAR(100),            -- ruta/alias BD master_ destino (NULL = no replica a master)
-    USER_BD     VARCHAR(20),
-    CLAVE       VARCHAR(60),             -- nunca se expone por API
-    ORDEN       INTEGER      DEFAULT 0,
-    ESTADO      SMALLINT     DEFAULT 1,  -- 1 = destino activo
+    IDSUCURSAL INTEGER      NOT NULL,   -- PK: idsucursal base del destino (offset)
+    SERVER     VARCHAR(100),            -- ruta/alias BD server_ destino
+    SYSTEM     VARCHAR(100),            -- ruta/alias BD system_ destino
+    MASTER     VARCHAR(100),            -- ruta/alias BD master_ destino (NULL = no replica a master)
+    ESTADO     SMALLINT     NOT NULL,   -- 1 = destino activo
+    ORDEN      INTEGER,
+    IP         VARCHAR(15),             -- host del destino (VPN)
     CONSTRAINT PK_CFG_USR_REPL PRIMARY KEY (IDSUCURSAL)
 );
 ```
+
+> ⚠️ **dialect 1:** las columnas `SYSTEM` y `MASTER` figuran como reservadas (igual que en
+> `CONFIGURACION_USUARIO`, que las renombró a `SYSTEM_BD`/`MASTER_BD`). La tabla ya existe con
+> esos nombres; el modelo las lee con alias (`server AS server_bd`, `system AS system_bd`,
+> `master AS master_bd`). Si `GET /replicacion/estado` devolviera `-104 token unknown`, renombrar
+> a `SERVER_BD`/`SYSTEM_BD`/`MASTER_BD` y ajustar `DEST_COLS` en `models/replicacion.model.js`.
+> **Credenciales de destino:** la tabla no guarda usuario/clave; el worker (etapa 2) reutiliza
+> `CONFIGURACION_USUARIO.USER_BD` / `CLAVE` del entorno central para autenticarse a cada destino.
 
 #### `REPLICACION_COLA` — outbox de replicación
 
