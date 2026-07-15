@@ -211,10 +211,20 @@ CREATE TABLE CONFIGURACION_USUARIO (
     CONTABILIDAD       SMALLINT     DEFAULT 0,
     TALENTO_HUMANO     SMALLINT     DEFAULT 0,
     DIAS_INACTIVIDAD   INTEGER      DEFAULT 90,
+    CREAR_SIN_ROL      SMALLINT     DEFAULT 1,
+    CLONAR             SMALLINT     DEFAULT 0,
+    REPLICAR           SMALLINT     DEFAULT 0,
     METADATA_EJECUTADO SMALLINT     DEFAULT 0 NOT NULL,
     CONSTRAINT PK_CFG_USR PRIMARY KEY (IP)
 );
 ```
+
+> **`CLONAR`** `SMALLINT` (`1`/`0`, default `0`): habilita en la UI la acción **Clonar accesos a otra
+> empresa** (misma BD, otra `idempresa`). Ver `UsuarioAPI.clonarAEmpresa`.
+> **`REPLICAR`** `SMALLINT` (`1`/`0`, default `0`): habilita el **motor de replicación** a BD destino
+> (sucursales server/system/master). A diferencia de clonar, reindexa `ORDEN` y `GG_MESERO.IDSUCURSAL`
+> según `CONFIGURACION_USUARIO_REPLICA`. Ambas columnas se agregan en `migrarDDL()` y se exponen en
+> `GET /configuracion/flags` (`clonar` / `replicar`).
 
 > **`METADATA_EJECUTADO`:** Cerrojo de inicialización. `0` = pendiente · `1` = completado.  
 > Se agrega automáticamente por `migrarDDL()` si la tabla ya existía sin esa columna.

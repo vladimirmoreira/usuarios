@@ -425,6 +425,8 @@ export type Configuracion = {
   contabilidad:    number | null;
   talento_humano:  number | null;
   crear_sin_rol:   number | null;
+  clonar:          number | null;
+  replicar:        number | null;
   metadata_ejecutado?: number | null;
 };
 
@@ -468,6 +470,8 @@ export type ConfigFlags = {
   talento_humano: boolean;
   complementario: boolean;
   crear_sin_rol:  boolean;
+  clonar:         boolean;
+  replicar:       boolean;
 };
 
 // ── Reportes ─────────────────────────────────────────────────────────────

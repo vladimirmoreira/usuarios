@@ -5,7 +5,7 @@ import toast from '../../lib/notify';
 import { ConfiguracionAPI, type Configuracion, type Operacion, type MetadataResultado } from '../../api/endpoints';
 import { useConfirm } from '../../hooks/useConfirm';
 
-type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'complementario'|'contabilidad'|'talento_humano'|'crear_sin_rol'> & {
+type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'complementario'|'contabilidad'|'talento_humano'|'crear_sin_rol'|'clonar'|'replicar'> & {
   clave:          string;
   legajo:         boolean;
   biometrico:     boolean;
@@ -14,12 +14,15 @@ type CfgForm = Omit<Configuracion, 'legajo'|'biometrico'|'gastronomia'|'compleme
   contabilidad:   boolean;
   talento_humano: boolean;
   crear_sin_rol:  boolean;
+  clonar:         boolean;
+  replicar:       boolean;
 };
 
 const emptyForm: CfgForm = {
   ip: '', server: '', sys_cfg: '', master: '', user_bd: '', clave: '',
   legajo: false, biometrico: false, gastronomia: false, complementario: false,
   contabilidad: false, talento_humano: false, crear_sin_rol: true,
+  clonar: false, replicar: false,
   maximo: null, ruta_archivo: null, version_nro: null, autorizado: null,
 };
 
@@ -33,6 +36,8 @@ const toForm = (r: Configuracion & { clave?: string }): CfgForm => ({
   contabilidad:   r.contabilidad === 1,
   talento_humano: r.talento_humano === 1,
   crear_sin_rol:  (r.crear_sin_rol ?? 1) === 1,
+  clonar:         (r.clonar ?? 0) === 1,
+  replicar:       (r.replicar ?? 0) === 1,
 });
 
 const fromForm = (f: CfgForm) => {
@@ -46,6 +51,8 @@ const fromForm = (f: CfgForm) => {
     contabilidad:   f.contabilidad ? 1 : 0,
     talento_humano: f.talento_humano ? 1 : 0,
     crear_sin_rol:  f.crear_sin_rol ? 1 : 0,
+    clonar:         f.clonar ? 1 : 0,
+    replicar:       f.replicar ? 1 : 0,
     maximo:         f.maximo === null || f.maximo === ('' as any) ? null : Number(f.maximo),
     // Omitir clave si está vacía (no cambiar la existente)
     ...(clave?.trim() ? { clave: clave.trim() } : {}),
@@ -533,6 +540,8 @@ export default function ConfiguracionPage() {
                   ['contabilidad',   'Contabilidad (BD Master)'],
                   ['talento_humano', 'Talento Humano (BD Master)'],
                   ['crear_sin_rol',  'Permitir crear usuarios "Sin Rol"'],
+                  ['clonar',         'Clonar accesos a otra empresa (misma BD)'],
+                  ['replicar',       'Replicar usuarios a BD destino (sucursales)'],
                 ] as [keyof CfgForm, string][]).map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 cursor-pointer select-none text-sm text-zinc-700">
                     <input type="checkbox" className="h-4 w-4 rounded accent-brand-600"

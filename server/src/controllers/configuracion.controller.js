@@ -116,6 +116,8 @@ const ConfiguracionController = {
         complementario: Number(c?.complementario) === 1,
         // Default 1 (habilitado) si la columna aún no existe / viene null.
         crear_sin_rol:  c?.crear_sin_rol == null ? true : Number(c?.crear_sin_rol) === 1,
+        clonar:         Number(c?.clonar) === 1,
+        replicar:       Number(c?.replicar) === 1,
       });
     } catch (e) { next(e); }
   },

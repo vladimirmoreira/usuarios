@@ -22,6 +22,8 @@ const cfgBody = z.object({
   contabilidad:  z.number().int().min(0).max(1).optional().nullable(),
   talento_humano:z.number().int().min(0).max(1).optional().nullable(),
   crear_sin_rol: z.number().int().min(0).max(1).optional().nullable(),
+  clonar:        z.number().int().min(0).max(1).optional().nullable(),
+  replicar:      z.number().int().min(0).max(1).optional().nullable(),
   dias_inactividad: z.number().int().optional().nullable(),
   ruta_archivo:  z.string().max(100).optional().nullable(),
   version_nro:   z.string().max(10).optional().nullable(),

@@ -19,7 +19,8 @@ const OperacionesModel = {
   async contextoPorIp(ip) {
     const rows = await query(
       'server',
-      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave, COALESCE(crear_sin_rol,1) AS crear_sin_rol
+      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave, COALESCE(crear_sin_rol,1) AS crear_sin_rol,
+              COALESCE(clonar,0) AS clonar, COALESCE(replicar,0) AS replicar
          FROM configuracion_usuario
         WHERE TRIM(ip) = TRIM(CAST(? AS VARCHAR(20)))`,
       [ip || ''],
@@ -28,7 +29,8 @@ const OperacionesModel = {
     // Fallback: primera fila (modo legacy)
     const fall = await query(
       'server',
-      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave, COALESCE(crear_sin_rol,1) AS crear_sin_rol
+      `SELECT FIRST 1 ip, legajo, biometrico, gastronomia, contabilidad, talento_humano, complementario, mail_resetclave, COALESCE(crear_sin_rol,1) AS crear_sin_rol,
+              COALESCE(clonar,0) AS clonar, COALESCE(replicar,0) AS replicar
          FROM configuracion_usuario`,
       [],
     );

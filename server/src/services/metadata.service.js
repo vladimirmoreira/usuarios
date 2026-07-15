@@ -341,6 +341,10 @@ async function migrarDDL() {
     `ALTER TABLE configuracion_usuario ADD MAIL_RESETCLAVE SMALLINT DEFAULT 0`,
     // CREAR_SIN_ROL: 1 = habilita la opción "Sin Rol" en el desplegable de Perfil al crear usuarios.
     `ALTER TABLE configuracion_usuario ADD CREAR_SIN_ROL SMALLINT DEFAULT 1`,
+    // CLONAR:   1 = habilita "Clonar accesos a otra empresa" (misma BD, otra idempresa).
+    // REPLICAR: 1 = habilita "Replicar usuario a BD destino (sucursal)" — motor de replicación.
+    `ALTER TABLE configuracion_usuario ADD CLONAR   SMALLINT DEFAULT 0`,
+    `ALTER TABLE configuracion_usuario ADD REPLICAR SMALLINT DEFAULT 0`,
     // TIPOMOVIMIENTO: campo ESTADO requerido por obtenerConceptos (WHERE estado = 1).
     // Si la tabla ya existía sin la columna, se agrega con default 1.
     `ALTER TABLE tipomovimiento ADD ESTADO SMALLINT DEFAULT 1`,
