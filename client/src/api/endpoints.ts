@@ -483,6 +483,8 @@ export const ReplicacionAPI = {
   reintentar:        (id: number) => api.post(`/replicacion/cola/${id}/reintentar`).then((r) => r.data),
   reintentarDestino: (idsucursal?: number) =>
     api.post('/replicacion/reintentar-destino', { idsucursal }).then((r) => r.data),
+  replicarUsuario:   (iduser: string, idsucursal?: number) =>
+    api.post<{ ok: boolean; encolados: number }>(`/replicacion/usuario/${iduser}`, { idsucursal }).then((r) => r.data),
 };
 
 export type MetadataResultado = {

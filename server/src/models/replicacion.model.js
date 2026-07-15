@@ -97,15 +97,51 @@ const ReplicacionModel = {
   },
 
   /**
-   * Encola un job por cada destino activo (outbox). Lo consumirá el worker (etapa 2).
-   * @param {{ iduser: string, operacion: string, payload?: object }} job
+   * Jobs PENDIENTE (estado 0) listos para procesar por el worker.
+   * No incluye ERROR/BLOQUEADO (esos se reencolan manualmente a PENDIENTE).
+   */
+  async tomarPendientes(limit = 20) {
+    return query(
+      'server',
+      `SELECT FIRST ${Number(limit) || 20} id, iduser, idsucursal, operacion, COALESCE(intentos,0) AS intentos
+         FROM replicacion_cola WHERE estado = ? ORDER BY id`,
+      [ESTADO.PENDIENTE],
+    );
+  },
+
+  /** Marca un job como PROCESANDO (para reflejarlo en el menú mientras corre). */
+  async marcarProcesando(id) {
+    return query('server',
+      `UPDATE replicacion_cola SET estado = ? WHERE id = ?`, [ESTADO.PROCESANDO, id]);
+  },
+
+  /**
+   * Cierra un job con un estado final (o lo deja PENDIENTE para reintento).
+   * @param {number} id
+   * @param {number} estado  ESTADO.*
+   * @param {string|null} error  texto (se trunca a 200)
+   * @param {boolean} bumpIntento  incrementar INTENTOS
+   */
+  async marcar(id, estado, error = null, bumpIntento = false) {
+    const sets = ['estado = ?', 'fecha_proc = CURRENT_TIMESTAMP', 'ultimo_error = ?'];
+    const params = [estado, error ? String(error).slice(0, 200) : null];
+    if (bumpIntento) sets.push('intentos = COALESCE(intentos,0) + 1');
+    params.push(id);
+    return query('server', `UPDATE replicacion_cola SET ${sets.join(', ')} WHERE id = ?`, params);
+  },
+
+  /**
+   * Encola un job por cada destino activo (outbox). Lo consume el worker.
+   * @param {{ iduser: string, operacion: string, payload?: object, idsucursal?: number|null }} job
    * @returns {Promise<number>} cantidad de jobs encolados
    */
-  async encolar({ iduser, operacion, payload = null }) {
+  async encolar({ iduser, operacion, payload = null, idsucursal = null }) {
     const destinos = await query(
       'server',
       `SELECT idsucursal FROM configuracion_usuario_replica
-        WHERE COALESCE(estado, 1) = 1 ORDER BY orden, idsucursal`,
+        WHERE COALESCE(estado, 1) = 1 ${idsucursal != null ? 'AND idsucursal = ?' : ''}
+        ORDER BY orden, idsucursal`,
+      idsucursal != null ? [idsucursal] : [],
     );
     if (!destinos.length) return 0;
     const payloadStr = payload == null ? null : JSON.stringify(payload);

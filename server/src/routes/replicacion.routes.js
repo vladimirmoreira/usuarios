@@ -20,4 +20,11 @@ router.post('/reintentar-destino',
   validate({ body: z.object({ idsucursal: z.coerce.number().int().optional().nullable() }) }),
   ctrl.reintentarDestino);
 
+router.post('/usuario/:iduser',
+  validate({
+    params: z.object({ iduser: z.string().min(1).max(10) }),
+    body: z.object({ idsucursal: z.coerce.number().int().optional().nullable() }).partial(),
+  }),
+  ctrl.replicarUsuario);
+
 module.exports = router;

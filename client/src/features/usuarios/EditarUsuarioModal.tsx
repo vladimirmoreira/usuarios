@@ -1,9 +1,9 @@
 import { useState, ChangeEvent, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Pencil, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, MapPin, Copy } from 'lucide-react';
+import { X, Pencil, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, MapPin, Copy, Radio } from 'lucide-react';
 import toast from '../../lib/notify';
 import { z } from 'zod';
-import { RolesAPI, Rol, UsuariosAPI, Usuario, Complemento, ConfiguracionAPI } from '../../api/endpoints';
+import { RolesAPI, Rol, UsuariosAPI, Usuario, Complemento, ConfiguracionAPI, ReplicacionAPI } from '../../api/endpoints';
 import { useAuth } from '../../auth/AuthContext';
 
 /* ── Esquema ───────────────────────────────────────────────────────── */
@@ -68,6 +68,14 @@ export default function EditarUsuarioModal({
   const destinos = (empresasQ.data?.system ?? []).filter(
     (e) => e.accesible === 1 && e.idempresa !== '1' && e.idempresa !== user?.idempresa,
   );
+  // Replicar usuario a las sucursales destino (encola + dispara el drenado).
+  const replicarM = useMutation({
+    mutationFn: () => ReplicacionAPI.replicarUsuario(usuario.iduser),
+    onSuccess: (r) => toast.success(
+      r.encolados > 0 ? `Replicación encolada a ${r.encolados} destino/s` : 'No hay destinos activos'),
+    onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al replicar'),
+  });
+
   const clonarM = useMutation({
     mutationFn: () => UsuariosAPI.clonarAEmpresa(usuario.iduser, destino),
     onSuccess: (r) => {
@@ -355,6 +363,26 @@ export default function EditarUsuarioModal({
                   </button>
                 </div>
                 <p className="mt-0.5 text-xs text-slate-400">Copia permisos/menú (no sucursal/depósitos). No sobrescribe si ya existe.</p>
+              </div>
+              )}
+
+              {/* Replicar a sucursales destino (motor de replicación) */}
+              {flagsQ.data?.replicar && (
+              <div>
+                <label className="label">Replicar a sucursales</label>
+                <div className="mt-1">
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    disabled={replicarM.isPending}
+                    onClick={() => replicarM.mutate()}
+                    title="Encola la replicación de este usuario a todas las sucursales destino activas"
+                  >
+                    {replicarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
+                    Replicar
+                  </button>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-400">Encola a todos los destinos activos. El estado se ve en el menú Replicación.</p>
               </div>
               )}
 

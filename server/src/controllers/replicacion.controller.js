@@ -1,6 +1,7 @@
 'use strict';
 
 const ReplicacionModel = require('../models/replicacion.model');
+const ReplicacionJob = require('../jobs/replicacion.job');
 const { auditar, OP } = require('../utils/audit');
 
 const { ESTADO, ESTADO_LABEL } = ReplicacionModel;
@@ -77,6 +78,23 @@ const ReplicacionController = {
       await auditar(req, req.user.iduser, OP.ACTUALIZAR_CUENTA,
         `Replicación: reintento destino ${idsucursal ?? 'TODOS'}`);
       res.json({ ok: true });
+    } catch (e) { next(e); }
+  },
+
+  /**
+   * POST /replicacion/usuario/:iduser — encola la replicación de un usuario a todos
+   * los destinos activos (o a uno si se pasa idsucursal) y dispara el drenado.
+   */
+  async replicarUsuario(req, res, next) {
+    try {
+      const iduser = req.params.iduser;
+      const idsucursal = req.body?.idsucursal != null ? Number(req.body.idsucursal) : null;
+      const encolados = await ReplicacionModel.encolar({ iduser, operacion: 'MANUAL', idsucursal });
+      await auditar(req, iduser, OP.MIGRAR_DATOS,
+        `Replicación manual encolada a ${idsucursal ?? 'todos'} (${encolados} destino/s)`);
+      // Drenado inmediato en segundo plano (no bloquea la respuesta).
+      ReplicacionJob.drenar().catch(() => {});
+      res.json({ ok: true, encolados });
     } catch (e) { next(e); }
   },
 };

@@ -169,8 +169,71 @@ function readBinaryBlob(scope, sql, params = []) {
   });
 }
 
+/**
+ * Conexión Firebird AD-HOC a un destino arbitrario (no usa los pools de env).
+ * La consume el motor de Replicación para escribir en cada BD sucursal.
+ * Devuelve un wrapper con:
+ *   - query(sql, params)       → filas mapeadas (mapRows), para SELECT/existencia.
+ *   - queryRaw(sql, params)    → filas crudas (sin mapper), para introspección.
+ *   - transaction(work)        → una transacción explícita (rollback si work lanza).
+ *   - detach()                 → cierra la conexión.
+ * @param {{host:string, port?:number, database:string, user:string, password:string, charset?:string, connectTimeout?:number}} opts
+ */
+function attachExternal(opts) {
+  const options = {
+    host: opts.host,
+    port: opts.port || 3050,
+    database: opts.database,
+    user: opts.user,
+    password: opts.password,
+    lowercase_keys: true,
+    role: null,
+    pageSize: 4096,
+    encoding: opts.charset || 'NONE',
+    connectTimeout: opts.connectTimeout || 8000,
+  };
+  return new Promise((resolve, reject) => {
+    Firebird.attach(options, (err, db) => {
+      if (err) return reject(err);
+      resolve({
+        raw: db,
+        query: (sql, params = []) =>
+          new Promise((res, rej) =>
+            db.query(sql, params, async (e, rows) => {
+              if (e) return rej(e);
+              try { res(await mapRows(rows)); } catch (er) { rej(er); }
+            })),
+        queryRaw: (sql, params = []) =>
+          new Promise((res, rej) =>
+            db.query(sql, params, (e, rows) =>
+              e ? rej(e) : res(Array.isArray(rows) ? rows : (rows ? [rows] : [])))),
+        transaction: (work) =>
+          new Promise((res, rej) => {
+            db.transaction(Firebird.ISOLATION_READ_COMMITTED, async (tErr, tx) => {
+              if (tErr) return rej(tErr);
+              const w = {
+                query: (sql, params = []) =>
+                  new Promise((qres, qrej) =>
+                    tx.query(sql, params, (e, rows) =>
+                      e ? qrej(e) : qres(Array.isArray(rows) ? rows : (rows ? [rows] : [])))),
+              };
+              try {
+                const out = await work(w);
+                tx.commit((cErr) => (cErr ? rej(cErr) : res(out)));
+              } catch (wErr) {
+                tx.rollback(() => {});
+                rej(wErr);
+              }
+            });
+          }),
+        detach: () => new Promise((res) => { try { db.detach(() => res()); } catch { res(); } }),
+      });
+    });
+  });
+}
+
 function shutdown() {
   Object.values(pools).forEach((p) => p && p.destroy && p.destroy());
 }
 
-module.exports = { getConnection, query, transaction, readBinaryBlob, shutdown };
+module.exports = { getConnection, query, transaction, readBinaryBlob, attachExternal, shutdown };

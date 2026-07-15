@@ -297,11 +297,28 @@ CREATE TABLE REPLICACION_COLA (
 > dependencia FK que no se pudo replicar). El menú **Replicación** (gateado por el flag `REPLICAR`
 > y por `AUTORIZADO`) muestra el conteo por destino y permite reintentar. Endpoints:
 > `GET /replicacion/estado`, `GET /replicacion/cola`, `POST /replicacion/cola/:id/reintentar`,
-> `POST /replicacion/reintentar-destino`. Modelo `models/replicacion.model.js`.
-> **Pendiente (etapa 2):** worker que consume la cola vía conexión Firebird directa a cada destino,
-> valida FKs (cascada `RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`) y aplica
-> DELETE+INSERT con reindex de ORDEN y offset de `GG_MESERO.IDSUCURSAL` (lógica portada del SP
-> legacy `PCD_OPERACIONES`, operación 10).
+> `POST /replicacion/reintentar-destino`, `POST /replicacion/usuario/:iduser` (encola + drena).
+
+##### Motor de replicación (worker) — etapa 2
+
+- **Servicio:** `services/replicacion.service.js`. Lee de central con los pools; escribe a cada
+  destino por conexión Firebird **ad-hoc** (`config/firebird.js` → `attachExternal`), transacción por BD.
+- **Upsert genérico** (reemplazo de `PCD_GENERA_REPLICA`): introspecta columnas del destino y hace
+  intersección origen ∩ destino + coacción de NOT NULL (texto `''` / numérico `0`), tolerando que el
+  clon destino tenga un esquema más viejo. Nunca escribe columnas inexistentes.
+- **Transformaciones:** `ORDEN` recalculado (sucursal/depósito propios del destino = orden 1) y
+  `GG_MESERO.IDSUCURSAL` = `IDSUCURSAL` del destino (offset por local). `IDMESERO` se preserva.
+- **Guardas FK:** verifica `SUCURSAL`/`DEPOSITO` antes de insertar (omite las inexistentes) y
+  `RH_PERSONA`/`RH_CARGO` del mesero (las anula si faltan). Lo omitido se reporta como `BLOQUEADO`.
+- **Worker:** `jobs/replicacion.job.js` (cron `REPLICACION_CRON`, default cada minuto;
+  `ENABLE_REPLICACION_JOB=0` lo apaga). Drena PENDIENTE; error de conexión (VPN caída) deja el job
+  PENDIENTE y reintenta; error de datos → ERROR.
+- **Probado** contra BD reales (central remota → 3 `.fdb` destino locales): `USUARIO`,
+  `USUARIOEMPRESA`, `USUARIO_SUCURSAL/CONCEPTO` y `GG_MESERO` con offset de sucursal verificado.
+- **Pendiente (etapa 2b):** escritura a `MASTER_BD` (usuario/usuarioempresa RRHH-Contab);
+  enganche automático en alta/baja/permisos (hoy sólo botón manual "Replicar" + endpoint);
+  cascada profunda de dependencias `RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`
+  (hoy: si falta la dependencia se anula/omite y se marca BLOQUEADO, en vez de replicarla).
 
 #### `HISTORIAL_USUARIO`
 
