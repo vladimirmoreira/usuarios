@@ -1,0 +1,23 @@
+'use strict';
+
+const router = require('express').Router();
+const { z } = require('zod');
+const validate = require('../middlewares/validate');
+const requireAuthorized = require('../middlewares/requireAuthorized');
+const ctrl = require('../controllers/replicacion.controller');
+
+// Todo el módulo de Replicación es solo para ADMIN / usuarios AUTORIZADOS.
+router.use(requireAuthorized);
+
+router.get('/estado', ctrl.estado);
+router.get('/cola', ctrl.cola);
+
+router.post('/cola/:id/reintentar',
+  validate({ params: z.object({ id: z.coerce.number().int().positive() }) }),
+  ctrl.reintentar);
+
+router.post('/reintentar-destino',
+  validate({ body: z.object({ idsucursal: z.coerce.number().int().optional().nullable() }) }),
+  ctrl.reintentarDestino);
+
+module.exports = router;

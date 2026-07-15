@@ -11,5 +11,6 @@ router.use('/catalogos', auth, require('./catalogo.routes'));
 router.use('/auditoria', auth, require('./auditoria.routes'));
 router.use('/reportes', auth, require('./reportes.routes'));
 router.use('/configuracion', auth, require('./configuracion.routes'));
+router.use('/replicacion', auth, require('./replicacion.routes'));
 
 module.exports = router;

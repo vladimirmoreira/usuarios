@@ -449,6 +449,42 @@ export const ConfiguracionAPI = {
   setEmpresaMasterMapping:  (idempresa: string, idempresa_system: string | null) => api.put(`/configuracion/empresas/master/${idempresa}`, { idempresa_system }).then((r) => r.data),
 };
 
+// ── Replicación ──────────────────────────────────────────────────────────
+export type ReplicacionDestino = {
+  idsucursal:     number;
+  nombre:         string;
+  servidor:       string | null;
+  replica_master: boolean;
+  activo:         boolean;
+  pendiente:      number;
+  procesando:     number;
+  enviado:        number;
+  error:          number;
+  bloqueado:      number;
+};
+
+export type ReplicacionJob = {
+  id:           number;
+  iduser:       string;
+  idsucursal:   number;
+  operacion:    string;
+  estado:       number;
+  estado_label: string;
+  intentos:     number;
+  ultimo_error: string | null;
+  fecha_alta:   string | null;
+  fecha_proc:   string | null;
+};
+
+export const ReplicacionAPI = {
+  estado: () => api.get<{ destinos: ReplicacionDestino[] }>('/replicacion/estado').then((r) => r.data),
+  cola:   (p: { idsucursal?: number; estado?: number } = {}) =>
+    api.get<ReplicacionJob[]>('/replicacion/cola', { params: p }).then((r) => r.data),
+  reintentar:        (id: number) => api.post(`/replicacion/cola/${id}/reintentar`).then((r) => r.data),
+  reintentarDestino: (idsucursal?: number) =>
+    api.post('/replicacion/reintentar-destino', { idsucursal }).then((r) => r.data),
+};
+
 export type MetadataResultado = {
   ok: boolean;
   detalle: {

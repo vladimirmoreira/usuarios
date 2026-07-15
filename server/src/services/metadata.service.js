@@ -348,6 +348,53 @@ async function migrarDDL() {
     // TIPOMOVIMIENTO: campo ESTADO requerido por obtenerConceptos (WHERE estado = 1).
     // Si la tabla ya existía sin la columna, se agrega con default 1.
     `ALTER TABLE tipomovimiento ADD ESTADO SMALLINT DEFAULT 1`,
+
+    // ── Motor de Replicación (destinos + cola) ──────────────────────────────
+    // CONFIGURACION_USUARIO_REPLICA: una fila por local destino (sucursal).
+    // PK = IDSUCURSAL "base" del destino (offset para ORDEN y GG_MESERO.IDSUCURSAL).
+    // MASTER_BD NULL = ese destino no replica a la BD master. SERVIDOR = host/IP (VPN).
+    `CREATE TABLE configuracion_usuario_replica (
+       IDSUCURSAL  INTEGER      NOT NULL,
+       NOMBRE      VARCHAR(60),
+       SERVIDOR    VARCHAR(60),
+       SERVER_BD   VARCHAR(100),
+       SYSTEM_BD   VARCHAR(100),
+       MASTER_BD   VARCHAR(100),
+       USER_BD     VARCHAR(20),
+       CLAVE       VARCHAR(60),
+       ORDEN       INTEGER      DEFAULT 0,
+       ESTADO      SMALLINT     DEFAULT 1,
+       CONSTRAINT PK_CFG_USR_REPL PRIMARY KEY (IDSUCURSAL)
+     )`,
+    // ALTERs idempotentes: si la tabla ya existía (creada a mano) sin estas columnas.
+    `ALTER TABLE configuracion_usuario_replica ADD NOMBRE    VARCHAR(60)`,
+    `ALTER TABLE configuracion_usuario_replica ADD SERVIDOR  VARCHAR(60)`,
+    `ALTER TABLE configuracion_usuario_replica ADD SERVER_BD VARCHAR(100)`,
+    `ALTER TABLE configuracion_usuario_replica ADD SYSTEM_BD VARCHAR(100)`,
+    `ALTER TABLE configuracion_usuario_replica ADD MASTER_BD VARCHAR(100)`,
+    `ALTER TABLE configuracion_usuario_replica ADD USER_BD   VARCHAR(20)`,
+    `ALTER TABLE configuracion_usuario_replica ADD CLAVE     VARCHAR(60)`,
+    `ALTER TABLE configuracion_usuario_replica ADD ORDEN     INTEGER  DEFAULT 0`,
+    `ALTER TABLE configuracion_usuario_replica ADD ESTADO    SMALLINT DEFAULT 1`,
+
+    // REPLICACION_COLA: outbox. Un job por (usuario, destino, operación).
+    // ESTADO: 0 PENDIENTE · 1 PROCESANDO · 2 ENVIADO · 3 ERROR · 4 BLOQUEADO (falta dependencia).
+    `CREATE TABLE replicacion_cola (
+       ID           INTEGER      NOT NULL,
+       IDUSER       VARCHAR(10),
+       IDSUCURSAL   INTEGER,
+       OPERACION    VARCHAR(20),
+       PAYLOAD      BLOB SUB_TYPE 1,
+       ESTADO       SMALLINT     DEFAULT 0 NOT NULL,
+       INTENTOS     INTEGER      DEFAULT 0,
+       ULTIMO_ERROR VARCHAR(200),
+       FECHA_ALTA   TIMESTAMP,
+       FECHA_PROC   TIMESTAMP,
+       CONSTRAINT PK_REPL_COLA PRIMARY KEY (ID)
+     )`,
+    `CREATE GENERATOR GEN_REPLICACION_COLA`,
+    `CREATE INDEX IDX_REPL_COLA_ESTADO ON replicacion_cola (ESTADO)`,
+    `CREATE INDEX IDX_REPL_COLA_DEST   ON replicacion_cola (IDSUCURSAL)`,
   ];
 
   const runDDL = (scope, statements) =>

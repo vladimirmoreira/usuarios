@@ -7,6 +7,7 @@ import AccesosPage from './features/accesos/AccesosPage';
 import RoleAccesosPage from './features/accesos/RoleAccesosPage';
 import RolesPage from './features/roles/RolesPage';
 import ConfiguracionPage from './features/configuracion/ConfiguracionPage';
+import ReplicacionPage from './features/replicacion/ReplicacionPage';
 import ReportesPage from './features/reportes/ReportesPage';
 import AuditoriaPage from './features/auditoria/AuditoriaPage';
 import AppLayout from './components/layout/AppLayout';
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="auditoria" element={<AuditoriaPage />} />
         <Route path="reportes" element={<ReportesPage />} />
         <Route path="configuracion" element={<ConfiguracionPage />} />
+        <Route path="replicacion" element={<ReplicacionPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

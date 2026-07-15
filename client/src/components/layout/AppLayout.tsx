@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LogOut, Users, ShieldCheck, UserCog, Settings, UserMinus, Sun, Moon, BarChart2, ScrollText } from 'lucide-react';
+import { LogOut, Users, ShieldCheck, UserCog, Settings, UserMinus, Sun, Moon, BarChart2, ScrollText, Radio } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { useTheme } from '../../auth/ThemeContext';
@@ -16,6 +16,14 @@ export default function AppLayout() {
     staleTime: 5 * 60_000,
   });
   const puedeVerConfig = accesoQ.data?.autorizado ?? false;
+
+  // Menú Replicación: visible solo si el flag REPLICAR está activo y el usuario es autorizado.
+  const flagsQ = useQuery({
+    queryKey: ['cfg-flags'],
+    queryFn: ConfiguracionAPI.flags,
+    staleTime: 5 * 60_000,
+  });
+  const puedeVerReplicacion = puedeVerConfig && (flagsQ.data?.replicar ?? false);
 
   const onLogout = () => { logout(); nav('/login'); };
 
@@ -106,6 +114,20 @@ export default function AppLayout() {
               }
             >
               <Settings className="h-4 w-4" /> Configuración
+            </NavLink>
+          )}
+          {puedeVerReplicacion && (
+            <NavLink
+              to="/replicacion"
+              className={({ isActive }) =>
+                `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                  isActive
+                    ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
+                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                }`
+              }
+            >
+              <Radio className="h-4 w-4" /> Replicación
             </NavLink>
           )}
         </nav>

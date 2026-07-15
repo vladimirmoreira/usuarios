@@ -240,6 +240,60 @@ CREATE TABLE CONFIGURACION_USUARIO (
 > está gateado por `METADATA_EJECUTADO = 1`, en instalaciones ya inicializadas la columna se agrega
 > manualmente con ese mismo `ALTER` (es idempotente).
 
+#### `CONFIGURACION_USUARIO_REPLICA` — destinos del motor de replicación
+
+Una fila por local destino (sucursal). Reemplaza el `RDB$RPL_DESTINO` del legacy Delphi.
+La PK `IDSUCURSAL` es el idsucursal **base** del destino y actúa como *offset*: en cada BD
+destino ese id es la sucursal propia (ORDEN 1) y desplaza `GG_MESERO.IDSUCURSAL`.
+
+```sql
+CREATE TABLE CONFIGURACION_USUARIO_REPLICA (
+    IDSUCURSAL  INTEGER      NOT NULL,   -- PK: idsucursal base del destino (offset)
+    NOMBRE      VARCHAR(60),             -- etiqueta del local
+    SERVIDOR    VARCHAR(60),             -- host/IP del destino (VPN)
+    SERVER_BD   VARCHAR(100),            -- ruta/alias BD server_ destino
+    SYSTEM_BD   VARCHAR(100),            -- ruta/alias BD system_ destino
+    MASTER_BD   VARCHAR(100),            -- ruta/alias BD master_ destino (NULL = no replica a master)
+    USER_BD     VARCHAR(20),
+    CLAVE       VARCHAR(60),             -- nunca se expone por API
+    ORDEN       INTEGER      DEFAULT 0,
+    ESTADO      SMALLINT     DEFAULT 1,  -- 1 = destino activo
+    CONSTRAINT PK_CFG_USR_REPL PRIMARY KEY (IDSUCURSAL)
+);
+```
+
+#### `REPLICACION_COLA` — outbox de replicación
+
+Un job por (usuario, destino, operación). Encolado por central; drenado por el worker
+(etapa 2). Resiliente a VPN caída: si el destino no responde, el job queda `PENDIENTE` y
+se reintenta. Gen `GEN_REPLICACION_COLA`.
+
+```sql
+CREATE TABLE REPLICACION_COLA (
+    ID           INTEGER   NOT NULL,
+    IDUSER       VARCHAR(10),
+    IDSUCURSAL   INTEGER,              -- destino → CONFIGURACION_USUARIO_REPLICA
+    OPERACION    VARCHAR(20),          -- ALTA / BAJA / PERMISOS / RESET_CLAVE / PERFIL / SUCURSAL / DATOS
+    PAYLOAD      BLOB SUB_TYPE 1,      -- snapshot JSON de lo que aplicar
+    ESTADO       SMALLINT  DEFAULT 0 NOT NULL,
+    INTENTOS     INTEGER   DEFAULT 0,
+    ULTIMO_ERROR VARCHAR(200),
+    FECHA_ALTA   TIMESTAMP,
+    FECHA_PROC   TIMESTAMP,
+    CONSTRAINT PK_REPL_COLA PRIMARY KEY (ID)
+);
+```
+
+> **`ESTADO`:** `0` PENDIENTE · `1` PROCESANDO · `2` ENVIADO · `3` ERROR · `4` BLOQUEADO (falta
+> dependencia FK que no se pudo replicar). El menú **Replicación** (gateado por el flag `REPLICAR`
+> y por `AUTORIZADO`) muestra el conteo por destino y permite reintentar. Endpoints:
+> `GET /replicacion/estado`, `GET /replicacion/cola`, `POST /replicacion/cola/:id/reintentar`,
+> `POST /replicacion/reintentar-destino`. Modelo `models/replicacion.model.js`.
+> **Pendiente (etapa 2):** worker que consume la cola vía conexión Firebird directa a cada destino,
+> valida FKs (cascada `RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`) y aplica
+> DELETE+INSERT con reindex de ORDEN y offset de `GG_MESERO.IDSUCURSAL` (lógica portada del SP
+> legacy `PCD_OPERACIONES`, operación 10).
+
 #### `HISTORIAL_USUARIO`
 
 ```sql
