@@ -61,15 +61,18 @@ async function drenar(limit = 20) {
 }
 
 /**
- * Programa el drenado periódico de la cola.
- * Deshabilitar: ENABLE_REPLICACION_JOB=0. Frecuencia: REPLICACION_CRON (default cada minuto).
+ * Programa el drenado periódico de la cola. Actúa como RED DE SEGURIDAD (reintentos):
+ * el procesamiento normal es inmediato al encolar (endpoint /replicacion/usuario y
+ * enganche automático llaman a drenar() en el acto). Este cron solo reprocesa los
+ * PENDIENTE que quedaron por un destino caído (VPN abajo).
+ * Deshabilitar: ENABLE_REPLICACION_JOB=0. Frecuencia: REPLICACION_CRON (default cada 15 min).
  */
 function start() {
   if (process.env.ENABLE_REPLICACION_JOB === '0') {
     logger.info('[jobs] replicacion job DESHABILITADO (ENABLE_REPLICACION_JOB=0)');
     return null;
   }
-  const expr = process.env.REPLICACION_CRON || '*/1 * * * *'; // cada minuto
+  const expr = process.env.REPLICACION_CRON || '*/15 * * * *'; // cada 15 min (red de seguridad)
   if (!cron.validate(expr)) {
     logger.warn({ expr }, '[jobs] expresión cron inválida para replicacion job');
     return null;

@@ -310,9 +310,11 @@ CREATE TABLE REPLICACION_COLA (
   `GG_MESERO.IDSUCURSAL` = `IDSUCURSAL` del destino (offset por local). `IDMESERO` se preserva.
 - **Guardas FK:** verifica `SUCURSAL`/`DEPOSITO` antes de insertar (omite las inexistentes) y
   `RH_PERSONA`/`RH_CARGO` del mesero (las anula si faltan). Lo omitido se reporta como `BLOQUEADO`.
-- **Worker:** `jobs/replicacion.job.js` (cron `REPLICACION_CRON`, default cada minuto;
-  `ENABLE_REPLICACION_JOB=0` lo apaga). Drena PENDIENTE; error de conexión (VPN caída) deja el job
-  PENDIENTE y reintenta; error de datos → ERROR.
+- **Worker:** `jobs/replicacion.job.js`. Es **red de seguridad de reintentos**: el procesamiento
+  normal es inmediato al encolar (el endpoint `/replicacion/usuario` y el enganche automático llaman
+  a `drenar()` en el acto). El cron (`REPLICACION_CRON`, default **cada 15 min**;
+  `ENABLE_REPLICACION_JOB=0` lo apaga) solo reprocesa los PENDIENTE que quedaron por un destino caído
+  (VPN abajo). Error de conexión → sigue PENDIENTE y reintenta; error de datos → ERROR.
 - **Probado** contra BD reales (central remota → 3 `.fdb` destino locales): `USUARIO`,
   `USUARIOEMPRESA`, `USUARIO_SUCURSAL/CONCEPTO` y `GG_MESERO` con offset de sucursal verificado.
 - **Pendiente (etapa 2b):** escritura a `MASTER_BD` (usuario/usuarioempresa RRHH-Contab);
