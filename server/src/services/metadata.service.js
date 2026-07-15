@@ -352,19 +352,22 @@ async function migrarDDL() {
     // ── Motor de Replicación (destinos + cola) ──────────────────────────────
     // CONFIGURACION_USUARIO_REPLICA: una fila por local destino (sucursal).
     // PK = IDSUCURSAL "base" del destino (offset para ORDEN y GG_MESERO.IDSUCURSAL).
-    // Esquema alineado 1:1 con la tabla real del proyecto (reemplaza RDB$RPL_DESTINO):
-    //   SERVER/SYSTEM/MASTER = rutas/alias de cada BD destino (MASTER NULL = no replica a master).
-    //   IP = host del destino (VPN). Credenciales: se reusan las de CONFIGURACION_USUARIO.
-    // ⚠ dialect 1: SYSTEM/MASTER están marcadas como reservadas; la tabla ya existe con esos
-    //   nombres, así que este CREATE se ignora ("already exists"). Solo aplica en instalación nueva.
+    // Esquema alineado 1:1 con la tabla real del proyecto (reemplaza RDB$RPL_DESTINO).
+    //   HOST_SERVER = host del destino (VPN). USER_BD/CLAVE_BD = credenciales del destino.
+    //   SERVER_BD / SYSTEM_BD / MASTER_BD = ruta/alias de cada BD destino (MASTER_BD NULL = sin master).
+    // La replicación escribe en las TRES BD según la tabla: SYSTEM_BD (usuario, usuarioempresa,
+    //   menu_general), MASTER_BD (usuario, usuarioempresa RRHH/Contab), SERVER_BD (gg_mesero,
+    //   rh_persona, rh_cargo, barrio, ciudad, usuario_sucursal/deposito/deposito1/concepto, etc.).
     `CREATE TABLE configuracion_usuario_replica (
-       IDSUCURSAL INTEGER      NOT NULL,
-       SERVER     VARCHAR(100),
-       SYSTEM     VARCHAR(100),
-       MASTER     VARCHAR(100),
-       ESTADO     SMALLINT     NOT NULL,
-       ORDEN      INTEGER,
-       IP         VARCHAR(15),
+       IDSUCURSAL  INTEGER      NOT NULL,
+       ESTADO      SMALLINT     NOT NULL,
+       ORDEN       INTEGER,
+       HOST_SERVER VARCHAR(15),
+       USER_BD     VARCHAR(30),
+       CLAVE_BD    VARCHAR(30),
+       SERVER_BD   VARCHAR(100),
+       SYSTEM_BD   VARCHAR(100),
+       MASTER_BD   VARCHAR(100),
        CONSTRAINT PK_CFG_USR_REPL PRIMARY KEY (IDSUCURSAL)
      )`,
 

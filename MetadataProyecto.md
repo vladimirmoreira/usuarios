@@ -248,24 +248,28 @@ destino ese id es la sucursal propia (ORDEN 1) y desplaza `GG_MESERO.IDSUCURSAL`
 
 ```sql
 CREATE TABLE CONFIGURACION_USUARIO_REPLICA (
-    IDSUCURSAL INTEGER      NOT NULL,   -- PK: idsucursal base del destino (offset)
-    SERVER     VARCHAR(100),            -- ruta/alias BD server_ destino
-    SYSTEM     VARCHAR(100),            -- ruta/alias BD system_ destino
-    MASTER     VARCHAR(100),            -- ruta/alias BD master_ destino (NULL = no replica a master)
-    ESTADO     SMALLINT     NOT NULL,   -- 1 = destino activo
-    ORDEN      INTEGER,
-    IP         VARCHAR(15),             -- host del destino (VPN)
+    IDSUCURSAL  INTEGER      NOT NULL,   -- PK: idsucursal base del destino (offset)
+    ESTADO      SMALLINT     NOT NULL,   -- 1 = destino activo
+    ORDEN       INTEGER,
+    HOST_SERVER VARCHAR(15),             -- host del destino (VPN)
+    USER_BD     VARCHAR(30),             -- usuario BD del destino
+    CLAVE_BD    VARCHAR(30),             -- clave BD del destino (nunca se expone por API)
+    SERVER_BD   VARCHAR(100),            -- ruta/alias BD server_ destino
+    SYSTEM_BD   VARCHAR(100),            -- ruta/alias BD system_ destino
+    MASTER_BD   VARCHAR(100),            -- ruta/alias BD master_ destino (NULL = no replica a master)
     CONSTRAINT PK_CFG_USR_REPL PRIMARY KEY (IDSUCURSAL)
 );
 ```
 
-> ⚠️ **dialect 1:** las columnas `SYSTEM` y `MASTER` figuran como reservadas (igual que en
-> `CONFIGURACION_USUARIO`, que las renombró a `SYSTEM_BD`/`MASTER_BD`). La tabla ya existe con
-> esos nombres; el modelo las lee con alias (`server AS server_bd`, `system AS system_bd`,
-> `master AS master_bd`). Si `GET /replicacion/estado` devolviera `-104 token unknown`, renombrar
-> a `SERVER_BD`/`SYSTEM_BD`/`MASTER_BD` y ajustar `DEST_COLS` en `models/replicacion.model.js`.
-> **Credenciales de destino:** la tabla no guarda usuario/clave; el worker (etapa 2) reutiliza
-> `CONFIGURACION_USUARIO.USER_BD` / `CLAVE` del entorno central para autenticarse a cada destino.
+> **Ruteo de tablas por BD destino** (lo aplica el worker de la etapa 2):
+> - `SYSTEM_BD`: `USUARIO`, `USUARIOEMPRESA`, `MENU_GENERAL` (permisos/accesos del ERP).
+> - `MASTER_BD`: `USUARIO`, `USUARIOEMPRESA` (módulos RRHH / Contabilidad). `NULL` = ese destino no replica a master.
+> - `SERVER_BD`: `GG_MESERO`, `RH_PERSONA`, `RH_CARGO`, `BARRIO`, `CIUDAD`, `USUARIO_SUCURSAL`,
+>   `USUARIO_CONCEPTO`, `USUARIO_DEPOSITO`, `USUARIO_DEPOSITO1`, y demás catálogos/dependencias.
+>
+> **Credenciales por destino:** cada fila trae `HOST_SERVER` + `USER_BD` + `CLAVE_BD`; el worker abre
+> un pool Firebird directo a cada BD (`HOST_SERVER:SERVER_BD` / `:SYSTEM_BD` / `:MASTER_BD`). El modelo
+> lee todo salvo `CLAVE_BD` (nunca se expone por API).
 
 #### `REPLICACION_COLA` — outbox de replicación
 
