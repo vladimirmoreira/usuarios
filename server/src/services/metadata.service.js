@@ -421,7 +421,8 @@ async function migrarDDL() {
                 msg.includes('already exists') ||
                 msg.includes('already defined') ||
                 msg.includes('duplicate value') ||
-                msg.includes('Attempt to store duplicate');
+                msg.includes('Attempt to store duplicate') ||
+                /violation of PRIMARY or UNIQUE KEY/i.test(msg); // seed idempotente ya presente
               if (!ignorar) logger.warn({ err: msg.slice(0, 200), sql: sql.slice(0, 80) }, 'MetadataDDL warn');
             }
             next();
