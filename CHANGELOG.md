@@ -50,13 +50,27 @@ motor en Node con cola resiliente. **Desplegado en producción.**
 - Botón **Clonar** (accesos a otra empresa) del editor de usuario ahora se muestra solo si
   `CLONAR=1`; botón **Replicar** solo si `REPLICAR=1`.
 
-### Pendiente — Replicación etapa 2b (tanda B)
+### Agregado — Replicación etapa 2b
 
-- Roles como dependencia previa garantizada (upsert de `TIPO_USUARIO` antes del usuario).
-- Enganche automático en alta/baja/permisos (hoy solo botón manual).
-- Propagar rol: recordatorio en la cola + botón "Replicar" con barra de progreso y throttling.
-- Cascada profunda del legajo (`RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`).
-- UX: renombrar/tooltip en la columna "Master" del menú (es indicador de config, no de éxito).
+- **MASTER_BD**: `escribirMaster()` replica `USUARIO`+`USUARIOEMPRESA` de RRHH/Contab.
+- **Retención purgable**: `RETENCION_REPLICACION_HORAS` (default 48); el worker purga los ENVIADO
+  vencidos. **Dedupe**: no duplica un PENDIENTE de (usuario, destino). **Guardas FK** en
+  `USUARIO_CONCEPTO` (tipomovimiento + opcionales).
+- **Roles como dependencia previa**: `escribirSystem` hace upsert de `TIPO_USUARIO` antes del
+  `USUARIO` (satisface la FK y sincroniza el rol).
+- **Enganche automático**: `services/replicacionTrigger.js` — tras alta/baja/permisos/etc. se
+  encola y drena la replicación del usuario (best-effort, gateado por `REPLICAR`).
+- **Propagar rol**: al editar un rol se marca un recordatorio (`REPLICACION_ROL_PENDIENTE`); en el
+  menú Replicación, botón "Replicar" encola a todos los usuarios del rol con **barra de progreso**
+  y **throttling** (`drenarTodo`).
+- **UI**: columna "Master" → "Repl. Master" con tooltip (indicador de config, no de éxito).
+- `CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION` ahora se lee bien de la BD (fix del alias `MIN`
+  reservado en dialect 3 que lo dejaba siempre en el default).
+
+### Pendiente — Replicación etapa 2b
+
+- Cascada profunda del legajo (`RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`): hoy si
+  falta una dependencia se anula/omite y se marca BLOQUEADO, en vez de replicarla.
 
 ---
 
