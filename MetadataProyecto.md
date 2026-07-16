@@ -310,11 +310,15 @@ CREATE TABLE REPLICACION_COLA (
   clon destino tenga un esquema más viejo. Nunca escribe columnas inexistentes.
 - **Transformaciones:** `ORDEN` recalculado (sucursal/depósito propios del destino = orden 1) y
   `GG_MESERO.IDSUCURSAL` = `IDSUCURSAL` del destino (offset por local). `IDMESERO` se preserva.
-- **Guardas FK:** verifica `SUCURSAL`/`DEPOSITO` antes de insertar (omite las inexistentes),
-  `RH_PERSONA`/`RH_CARGO` del mesero (las anula si faltan), y en `USUARIO_CONCEPTO`:
-  `TIPOMOVIMIENTO` (FK dura → omite el concepto si falta) + FKs opcionales
-  (talonario/vendedor/rh_persona/planventa/condicion → anula si el target no existe; `<=0` = sin
-  referencia). Lo omitido/anulado se reporta como `BLOQUEADO`.
+- **Cascada constraint-driven:** el motor lee las FK REALES de cada tabla del destino
+  (`RDB$` metadata) y las resuelve recursivamente, replicando de central lo que falte, en orden
+  (`fksDe` + `garantizarFila`, autónomas antes de la tx). Cubre toda la cadena sin hardcodear:
+  `RH_PERSONA`→ciudad/barrio/país/profesión/estadocivil, `RH_CARGO`→dpto/tipocargo/tiposalario/
+  tipocontrato/formapago/moneda, `GG_MESERO`→gg_tipo_mesero, ciudad→depgeografico, barrio→ciudad.
+- **Guardas puntuales:** `SUCURSAL`/`DEPOSITO`/`TIPOMOVIMIENTO` se verifican y se omite la fila si
+  faltan; `USUARIOEMPRESA.IDEMPRESA`→`EMPRESAS` se omite si la empresa no existe (dato de instalación,
+  no se replica). `GG_MESERO.rh_idpersona`/`idcargo` pueden venir nulos (flag LEGAJO) → el mesero se
+  replica igual. Lo omitido se reporta como `BLOQUEADO`. Introspección excluye columnas COMPUTADAS.
 - **MASTER_BD:** `escribirMaster()` replica `USUARIO`+`USUARIOEMPRESA` de RRHH/Contab (solo si el
   usuario existe en la master central; copia master→master verbatim, sin traducir idempresa).
 - **Rol como dependencia previa:** `escribirSystem` hace upsert de `TIPO_USUARIO` (el `idtipo_usuario`

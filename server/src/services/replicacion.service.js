@@ -206,26 +206,37 @@ async function leerUsuarioCentral(iduser, destinoId) {
 
 async function escribirSystem(destino, data) {
   const conn = await attachExternal(optsDestino(destino, destino.system_bd));
+  const bloqueos = [];
   try {
     // Introspección del destino ANTES de la transacción (esquemas pueden diferir).
     const cU = await metaDeConn(conn, 'USUARIO');
     const cUE = await metaDeConn(conn, 'USUARIOEMPRESA');
     const cTU = await metaDeConn(conn, 'TIPO_USUARIO');
-    // Rol como dependencia previa garantizada: si el usuario tiene idtipo_usuario,
-    // se lee su fila de TIPO_USUARIO en central para asegurarla en el destino (FK de
-    // usuario.idtipo_usuario). idtipo_usuario <= 0 = "Sin Rol" → no hay dependencia.
+    // Rol como dependencia previa garantizada (usuario.idtipo_usuario no es FK dura pero el rol
+    // debe existir para que el módulo lo muestre). idtipo_usuario <= 0 = "Sin Rol" → sin dependencia.
     const idtipo = Number(data.usuario.idtipo_usuario);
     const rolRow = idtipo > 0
       ? await leerFila('system', 'TIPO_USUARIO', 'idtipo_usuario', idtipo)
       : null;
 
-    return await conn.transaction(async (tx) => {
+    // Guarda FK: USUARIOEMPRESA.IDEMPRESA → EMPRESAS. Las empresas son dato de instalación
+    // (no se replican); si la empresa no existe en la sucursal, se omite esa fila.
+    const uesOk = [];
+    for (const ue of data.usuarioempresa) {
+      const idemp = ue.idempresa;
+      if (idemp != null && String(idemp).trim() !== '') {
+        const ex = await conn.query('SELECT 1 FROM empresas WHERE idempresa = ?', [idemp]).catch(() => []);
+        if (!ex.length) { bloqueos.push(`usuarioempresa: empresa ${String(idemp).trim()} inexistente en destino → omitida`); continue; }
+      }
+      uesOk.push(ue);
+    }
+
+    const res = await conn.transaction(async (tx) => {
       const r = { rol: null, usuario: null, usuarioempresa: 0, menu: 0 };
-      // 1) Garantizar el rol antes del usuario (upsert = crea si falta, sincroniza si existe).
       if (rolRow) r.rol = await upsert(tx, 'TIPO_USUARIO', prepararFila(rolRow, cTU), ['IDTIPO_USUARIO']);
       r.usuario = await upsert(tx, 'USUARIO', prepararFila(data.usuario, cU), ['IDUSER']);
 
-      for (const ue of data.usuarioempresa) {
+      for (const ue of uesOk) {
         await upsert(tx, 'USUARIOEMPRESA', prepararFila(ue, cUE), ['IDUSER', 'IDEMPRESA']);
         r.usuarioempresa++;
       }
@@ -241,115 +252,86 @@ async function escribirSystem(destino, data) {
       }
       return r;
     });
+    return { ...res, bloqueos };
   } finally {
     await conn.detach();
   }
 }
 
-// ── Cascada profunda de dependencias (legajo) ───────────────────────────────
-// Se ejecuta AUTÓNOMA (con conn.query, auto-commit) ANTES de la tx del mesero, igual que
-// el SP legacy con "IN AUTONOMOUS TRANSACTION": así un fallo en una dependencia no aborta
-// la transacción principal y lo ya replicado queda commiteado.
+// ── Cascada de dependencias CONSTRAINT-DRIVEN ───────────────────────────────
+// Se ejecuta AUTÓNOMA (conn.query, auto-commit) ANTES de la tx principal (como el SP con
+// "IN AUTONOMOUS TRANSACTION"). Lee las FK REALES de cada tabla del DESTINO y las resuelve
+// recursivamente, replicando de central lo que falte. Cubre todas las tablas del SP sin
+// hardcodear el grafo de dependencias.
 
 async function metaCached(conn, cache, tabla) {
-  const k = tabla.toUpperCase();
+  const k = `META:${tabla.toUpperCase()}`;
   if (!cache.has(k)) cache.set(k, await metaDeConn(conn, tabla));
   return cache.get(k);
 }
 
-/** Replica una fila puntual desde central al destino (upsert). Devuelve true si existía en central. */
-async function replicarFila(conn, cache, scope, tabla, pkCol, pkVal) {
-  const cols = await nonBlobCols(scope, tabla);
-  const row = (await query(scope, `SELECT FIRST 1 ${cols.join(', ')} FROM ${tabla} WHERE ${pkCol} = ?`, [pkVal]))[0];
-  if (!row) return false;
-  const meta = await metaCached(conn, cache, tabla);
-  await upsert(conn, tabla, prepararFila(row, meta), [pkCol.toUpperCase()]);
-  return true;
+/** FKs de una tabla en el DESTINO: [{ col, reftab, refcol }] (col en minúscula). Cacheado. */
+async function fksDe(conn, cache, tabla) {
+  const k = `FK:${tabla.toUpperCase()}`;
+  if (cache.has(k)) return cache.get(k);
+  let list = [];
+  try {
+    list = await conn.query(
+      `SELECT TRIM(isf.rdb$field_name) AS col, TRIM(rc2.rdb$relation_name) AS reftab,
+              TRIM(isf2.rdb$field_name) AS refcol
+         FROM rdb$relation_constraints rc
+         JOIN rdb$ref_constraints refc ON refc.rdb$constraint_name = rc.rdb$constraint_name
+         JOIN rdb$relation_constraints rc2 ON rc2.rdb$constraint_name = refc.rdb$const_name_uq
+         JOIN rdb$index_segments isf  ON isf.rdb$index_name  = rc.rdb$index_name
+         JOIN rdb$index_segments isf2 ON isf2.rdb$index_name = rc2.rdb$index_name
+                                     AND isf2.rdb$field_position = isf.rdb$field_position
+        WHERE rc.rdb$constraint_type = 'FOREIGN KEY' AND rc.rdb$relation_name = ?
+        ORDER BY isf.rdb$field_position`, [tabla.toUpperCase()]);
+  } catch (_) { list = []; }
+  const out = list.map((f) => ({
+    col: String(f.col).trim().toLowerCase(),
+    reftab: String(f.reftab).trim(),
+    refcol: String(f.refcol).trim(),
+  }));
+  cache.set(k, out);
+  return out;
 }
 
-/** Garantiza que exista una fila (pk) en el destino; la replica de central si falta. Best-effort. */
-async function garantizar(conn, cache, scope, tabla, pkCol, val, bloqueos) {
-  if (!(Number(val) > 0)) return true; // sin referencia
-  const ex = await conn.query(`SELECT 1 FROM ${tabla} WHERE ${pkCol} = ?`, [val]);
-  if (ex.length) return true;
+/**
+ * Garantiza en el destino la fila (pkCol=pkVal) de `tabla`, replicándola de central si falta,
+ * resolviendo antes sus FK recursivamente (según las constraints REALES del destino).
+ * Best-effort: si algo falla se registra en `bloqueos` y no aborta. `visto` corta ciclos.
+ */
+async function garantizarFila(conn, cache, scope, tabla, pkCol, pkVal, bloqueos, visto) {
+  if (!(Number(pkVal) > 0)) return true; // 0/null = sin referencia (centinela)
+  const key = `${tabla.toUpperCase()}#${pkVal}`;
+  if (visto.has(key)) return true;
+  visto.add(key);
+  if ((await conn.query(`SELECT 1 FROM ${tabla} WHERE ${pkCol} = ?`, [pkVal])).length) return true;
+
+  const cols = await nonBlobCols(scope, tabla);
+  const row = (await query(scope, `SELECT FIRST 1 ${cols.join(', ')} FROM ${tabla} WHERE ${pkCol} = ?`, [pkVal]))[0];
+  if (!row) { bloqueos.push(`${tabla} ${pkVal} no existe en central`); return false; }
+
+  // 1) Resolver sus dependencias FK primero (en el orden que exige el destino).
+  for (const fk of await fksDe(conn, cache, tabla)) {
+    await garantizarFila(conn, cache, scope, fk.reftab, fk.refcol, row[fk.col], bloqueos, visto);
+  }
+  // 2) Insertar/actualizar la fila.
   try {
-    const ok = await replicarFila(conn, cache, scope, tabla, pkCol, val);
-    if (!ok) bloqueos.push(`${tabla} ${val} no existe en central`);
-    return ok;
+    await upsert(conn, tabla, prepararFila(row, await metaCached(conn, cache, tabla)), [pkCol.toUpperCase()]);
+    return true;
   } catch (e) {
-    bloqueos.push(`${tabla} ${val}: ${String(e.message).slice(0, 40)}`);
+    bloqueos.push(`${tabla} ${pkVal}: ${String(e.message).slice(0, 50)}`);
     return false;
   }
 }
 
-/** Ciudad → DEPGEOGRAFICO (sub-cascada geográfica). */
-async function garantizarCiudad(conn, cache, idciudad, bloqueos) {
-  if (!(Number(idciudad) > 0)) return true;
-  if ((await conn.query('SELECT 1 FROM ciudad WHERE idciudad = ?', [idciudad])).length) return true;
-  const cols = await nonBlobCols('server', 'CIUDAD');
-  const row = (await query('server', `SELECT FIRST 1 ${cols.join(', ')} FROM ciudad WHERE idciudad = ?`, [idciudad]))[0];
-  if (!row) { bloqueos.push(`ciudad ${idciudad} no existe en central`); return false; }
-  await garantizar(conn, cache, 'server', 'depgeografico', 'iddepartamento', row.iddepartamento, bloqueos);
-  try { await upsert(conn, 'CIUDAD', prepararFila(row, await metaCached(conn, cache, 'CIUDAD')), ['IDCIUDAD']); return true; }
-  catch (e) { bloqueos.push(`ciudad ${idciudad}: ${String(e.message).slice(0, 40)}`); return false; }
-}
-
-/** Barrio → Ciudad (sub-cascada geográfica). */
-async function garantizarBarrio(conn, cache, idbarrio, bloqueos) {
-  if (!(Number(idbarrio) > 0)) return true;
-  if ((await conn.query('SELECT 1 FROM barrio WHERE idbarrio = ?', [idbarrio])).length) return true;
-  const cols = await nonBlobCols('server', 'BARRIO');
-  const row = (await query('server', `SELECT FIRST 1 ${cols.join(', ')} FROM barrio WHERE idbarrio = ?`, [idbarrio]))[0];
-  if (!row) { bloqueos.push(`barrio ${idbarrio} no existe en central`); return false; }
-  await garantizarCiudad(conn, cache, row.idciudad, bloqueos);
-  try { await upsert(conn, 'BARRIO', prepararFila(row, await metaCached(conn, cache, 'BARRIO')), ['IDBARRIO']); return true; }
-  catch (e) { bloqueos.push(`barrio ${idbarrio}: ${String(e.message).slice(0, 40)}`); return false; }
-}
-
-/**
- * Cascada del legajo de un mesero: catálogos (profesion/ciudad/pais/barrio/estudio) →
- * RH_PERSONA → RH_DPTO → RH_CARGO, en orden de FK. Devuelve { persona, cargo } presentes.
- */
-async function garantizarLegajo(conn, cache, idpersona, idcargo, bloqueos) {
-  const res = { persona: false, cargo: false };
-  if (Number(idpersona) > 0) {
-    if ((await conn.query('SELECT 1 FROM rh_persona WHERE idpersona = ?', [idpersona])).length) {
-      res.persona = true;
-    } else {
-      const pcols = await nonBlobCols('server', 'RH_PERSONA');
-      const p = (await query('server', `SELECT FIRST 1 ${pcols.join(', ')} FROM rh_persona WHERE idpersona = ?`, [idpersona]))[0];
-      if (p) {
-        await garantizar(conn, cache, 'server', 'profesion',  'idprofesion', p.idprofesion, bloqueos);
-        await garantizar(conn, cache, 'server', 'pais',       'idpais',      p.idpais_nacimiento, bloqueos);
-        await garantizarCiudad(conn, cache, p.idciudad_nacimiento, bloqueos);
-        await garantizarCiudad(conn, cache, p.idciudad, bloqueos);
-        await garantizarBarrio(conn, cache, p.idbarrio, bloqueos);
-        await garantizar(conn, cache, 'server', 'rh_estudio', 'idestudio',   p.idestudio, bloqueos);
-        try {
-          const meta = await metaCached(conn, cache, 'RH_PERSONA');
-          await upsert(conn, 'RH_PERSONA', prepararFila(p, meta), ['IDPERSONA']);
-          res.persona = true;
-        } catch (e) { bloqueos.push(`rh_persona ${idpersona}: ${String(e.message).slice(0, 40)}`); }
-      }
-    }
+/** Garantiza SOLO las FK de una fila `row` de `tabla` (sin insertar la fila). Para gg_mesero. */
+async function garantizarFksDe(conn, cache, scope, tabla, row, bloqueos, visto) {
+  for (const fk of await fksDe(conn, cache, tabla)) {
+    await garantizarFila(conn, cache, scope, fk.reftab, fk.refcol, row[fk.col], bloqueos, visto);
   }
-  if (Number(idcargo) > 0) {
-    if ((await conn.query('SELECT 1 FROM rh_cargo WHERE idcargo = ?', [idcargo])).length) {
-      res.cargo = true;
-    } else if (res.persona) { // rh_cargo referencia a rh_persona
-      const ccols = await nonBlobCols('server', 'RH_CARGO');
-      const c = (await query('server', `SELECT FIRST 1 ${ccols.join(', ')} FROM rh_cargo WHERE idcargo = ?`, [idcargo]))[0];
-      if (c) {
-        await garantizar(conn, cache, 'server', 'rh_dpto', 'iddpto', c.iddpto, bloqueos);
-        try {
-          const meta = await metaCached(conn, cache, 'RH_CARGO');
-          await upsert(conn, 'RH_CARGO', prepararFila(c, meta), ['IDCARGO']);
-          res.cargo = true;
-        } catch (e) { bloqueos.push(`rh_cargo ${idcargo}: ${String(e.message).slice(0, 40)}`); }
-      }
-    }
-  }
-  return res;
 }
 
 async function escribirServer(destino, data) {
@@ -361,9 +343,22 @@ async function escribirServer(destino, data) {
   try {
     const cCpt = await metaDeConn(conn, 'USUARIO_CONCEPTO');
     const cMes = await metaDeConn(conn, 'GG_MESERO');
-    // Cascada profunda del legajo del mesero (autónoma, antes de la tx principal).
-    if (data.mesero && (Number(data.mesero.rh_idpersona) > 0 || Number(data.mesero.idcargo) > 0)) {
-      await garantizarLegajo(conn, metaCache, data.mesero.rh_idpersona, data.mesero.idcargo, bloqueos);
+    // Cascada de dependencias (autónoma, antes de la tx principal).
+    const visto = new Set();
+    // Conceptos: garantizar los TIPOMOVIMIENTO (única FK dura de usuario_concepto).
+    if (data.conceptos.length) {
+      const tms = [...new Set(data.conceptos.map((c) => Number(c.idtipomovimiento)).filter((n) => n > 0))];
+      for (const tm of tms) {
+        await garantizarFila(conn, metaCache, 'server', 'tipomovimiento', 'idtipomovimiento', tm, bloqueos, visto);
+      }
+    }
+    // Mesero: FK propias de GG_MESERO según el destino (p. ej. idtipo_mesero → gg_tipo_mesero) +
+    // legajo por completitud (rh_persona/rh_cargo y toda su cascada). rh_idpersona/idcargo pueden
+    // venir nulos si el flag LEGAJO de central está apagado → garantizarFila los saltea.
+    if (data.mesero) {
+      await garantizarFksDe(conn, metaCache, 'server', 'GG_MESERO', data.mesero, bloqueos, visto);
+      await garantizarFila(conn, metaCache, 'server', 'rh_persona', 'idpersona', data.mesero.rh_idpersona, bloqueos, visto);
+      await garantizarFila(conn, metaCache, 'server', 'rh_cargo', 'idcargo', data.mesero.idcargo, bloqueos, visto);
     }
     const res = await conn.transaction(async (tx) => {
       const r = { sucursales: 0, depositos: 0, depositos1: 0, conceptos: 0, mesero: null };
@@ -392,28 +387,16 @@ async function escribirServer(destino, data) {
         }
       }
 
-      // Conceptos: sin PK → delete+insert (intersección de columnas).
-      // Guarda FK: idtipomovimiento debe existir en destino (FK dura). Los FK opcionales
-      // (talonario/vendedor/persona/planventa/condicion) se anulan si su target no existe.
-      const FK_OPC = [
-        ['idtalonario', 'talonario', 'idtalonario'],
-        ['idvendedor', 'vendedor', 'idvendedor'],
-        ['idpersona', 'rh_persona', 'idpersona'],
-        ['idplanventa', 'planventa', 'idplanventa'],
-        ['idcondicion', 'condicion', 'idcondicion'],
-      ];
+      // Conceptos: sin PK → delete+insert. La única FK dura es idtipomovimiento (ya garantizado
+      // en la cascada); si aun así falta se omite el concepto. Las demás columnas de usuario_concepto
+      // NO tienen FK (verificado en el esquema), así que no se anulan: se preservan tal cual.
       await tx.query('DELETE FROM usuario_concepto WHERE iduser = ?', [iduser]);
       for (const cRaw of data.conceptos) {
-        const tmOk = await tx.query('SELECT 1 FROM tipomovimiento WHERE idtipomovimiento = ?', [cRaw.idtipomovimiento]);
-        if (!tmOk.length) { bloqueos.push(`concepto: tipomovimiento ${cRaw.idtipomovimiento} inexistente`); continue; }
-        const c = prepararFila(cRaw, cCpt);
-        for (const [campo, tabla, pkcol] of FK_OPC) {
-          const val = c[campo];
-          if (val == null) continue;
-          if (Number(val) <= 0) { c[campo] = null; continue; } // 0 = centinela "sin referencia"
-          const ok = await tx.query(`SELECT 1 FROM ${tabla} WHERE ${pkcol} = ?`, [val]).catch(() => [{}]);
-          if (!ok.length) { bloqueos.push(`concepto tm${cRaw.idtipomovimiento}: ${campo} ${val} inexistente → null`); c[campo] = null; }
+        if (Number(cRaw.idtipomovimiento) > 0) {
+          const tmOk = await tx.query('SELECT 1 FROM tipomovimiento WHERE idtipomovimiento = ?', [cRaw.idtipomovimiento]);
+          if (!tmOk.length) { bloqueos.push(`concepto: tipomovimiento ${cRaw.idtipomovimiento} inexistente`); continue; }
         }
+        const c = prepararFila(cRaw, cCpt);
         const cols = Object.keys(c);
         await tx.query(
           `INSERT INTO usuario_concepto (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
@@ -498,12 +481,16 @@ async function replicarUsuario(idsucursal, iduser) {
   const server = await escribirServer(destino, data);
   const master = await escribirMaster(destino, iduser);
 
-  const bloqueos = server.bloqueos || [];
+  const bloqueos = [...(system.bloqueos || []), ...(server.bloqueos || [])];
   logger.info({ iduser, idsucursal, system, server, master }, 'replicarUsuario');
   return {
     ok: true,
     bloqueado: bloqueos.length > 0,
-    detalle: { system, server: { ...server, bloqueos: undefined }, master, bloqueos },
+    detalle: {
+      system: { ...system, bloqueos: undefined },
+      server: { ...server, bloqueos: undefined },
+      master, bloqueos,
+    },
   };
 }
 
