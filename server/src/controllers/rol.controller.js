@@ -8,12 +8,17 @@ const GgMeseroModel = require('../models/ggMesero.model');
 const CatalogoModel = require('../models/catalogo.model');
 const env = require('../config/env');
 const { auditar, OP } = require('../utils/audit');
+const { marcarRolParaPropagar } = require('../services/replicacionTrigger');
 
 const empresaDe = (req) => req.user?.idempresa;
 const ipDe = (req) => req.headers['x-client-ip'] || req.ip;
 
-const audRol = (req, rolIduser, detalle) =>
-  auditar(req, rolIduser, OP.ACTUALIZAR_CUENTA, `Rol-Template: ${detalle}`);
+// Se llama en TODOS los cambios de template de rol → punto único para auditar +
+// marcar el rol como pendiente de propagar a sucursales (best-effort, gateado por flag).
+const audRol = (req, rolIduser, detalle) => {
+  if (req.params?.idperfil) marcarRolParaPropagar(req.params.idperfil);
+  return auditar(req, rolIduser, OP.ACTUALIZAR_CUENTA, `Rol-Template: ${detalle}`);
+};
 
 async function resolverTemplate(idperfil) {
   const rol = await RolModel.templateIduser(idperfil);

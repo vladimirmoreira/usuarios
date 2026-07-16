@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Radio, RefreshCw, Server, Loader2, AlertTriangle, CheckCircle2, Clock, Ban } from 'lucide-react';
+import { Radio, RefreshCw, Server, Loader2, AlertTriangle, CheckCircle2, Clock, Ban, UserCog } from 'lucide-react';
 import toast from '../../lib/notify';
 import { ReplicacionAPI, type ReplicacionDestino } from '../../api/endpoints';
 
@@ -51,8 +51,55 @@ export default function ReplicacionPage() {
     onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al reintentar'),
   });
 
+  // ── Propagación de rol (con barra de progreso + throttling en el server) ──
+  const [propagando, setPropagando] = useState<{ idtipo: number; total: number; baseline: number } | null>(null);
+
+  const rolesPendQ = useQuery({
+    queryKey: ['replicacion', 'roles-pendientes'],
+    queryFn: ReplicacionAPI.rolesPendientes,
+    refetchInterval: 15_000,
+  });
+
+  const progresoQ = useQuery({
+    queryKey: ['replicacion', 'progreso'],
+    queryFn: ReplicacionAPI.progreso,
+    enabled: propagando != null,
+    refetchInterval: propagando != null ? 1200 : false,
+  });
+
+  const propagarM = useMutation({
+    mutationFn: async (idtipo: number) => {
+      const baseline = (await ReplicacionAPI.progreso()).abierto; // jobs abiertos previos
+      const r = await ReplicacionAPI.propagarRol(idtipo);
+      return { idtipo, baseline, ...r };
+    },
+    onSuccess: (r) => {
+      if (r.encolados > 0) setPropagando({ idtipo: r.idtipo, total: r.encolados, baseline: r.baseline });
+      else toast.success('Sin usuarios/destinos que propagar');
+      invalidar();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error || 'Error al propagar'),
+  });
+
+  // Fin de la propagación cuando los jobs abiertos vuelven al nivel previo.
+  useEffect(() => {
+    if (!propagando || progresoQ.data == null) return;
+    const restante = Math.max(0, progresoQ.data.abierto - propagando.baseline);
+    if (restante <= 0) {
+      setPropagando(null);
+      toast.success('Propagación completada');
+      invalidar();
+    }
+  }, [progresoQ.data, propagando]);
+
+  const pctProp = propagando
+    ? Math.min(100, Math.round(
+        100 * (propagando.total - Math.max(0, (progresoQ.data?.abierto ?? propagando.total) - propagando.baseline)) / propagando.total))
+    : 0;
+
   const destinos = estadoQ.data?.destinos ?? [];
   const totalError = destinos.reduce((a, d) => a + d.error + d.bloqueado, 0);
+  const rolesPend = rolesPendQ.data ?? [];
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -85,6 +132,51 @@ export default function ReplicacionPage() {
           </button>
         </div>
       </div>
+
+      {/* Roles pendientes de propagar */}
+      {(rolesPend.length > 0 || propagando) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-900/10">
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+            <UserCog className="h-4 w-4" /> Roles pendientes de propagar a sucursales
+          </div>
+
+          {propagando && (
+            <div className="mb-3">
+              <div className="mb-1 flex justify-between text-xs text-zinc-600 dark:text-zinc-300">
+                <span>Propagando rol… (encola a todos sus usuarios, con throttling)</span>
+                <span>{pctProp}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                <div className="h-full bg-brand-600 transition-all duration-500" style={{ width: `${pctProp}%` }} />
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            {rolesPend.map((r) => (
+              <div key={r.idtipo_usuario}
+                className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm dark:bg-zinc-900">
+                <div>
+                  <span className="font-medium text-zinc-800 dark:text-zinc-100">{r.descripcion || `Rol ${r.idtipo_usuario}`}</span>
+                  <span className="ml-2 text-xs text-zinc-400">#{r.idtipo_usuario} · {r.usuarios} usuario(s) · {fmt(r.fecha)}</span>
+                </div>
+                <button
+                  className="btn-outline text-xs px-2 py-1"
+                  disabled={propagando != null || propagarM.isPending}
+                  onClick={() => propagarM.mutate(r.idtipo_usuario)}
+                  title="Encola la replicación de todos los usuarios de este rol a las sucursales"
+                >
+                  {propagarM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
+                  Replicar
+                </button>
+              </div>
+            ))}
+            {rolesPend.length === 0 && propagando && (
+              <div className="text-xs text-zinc-500">Propagación en curso…</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Destinos */}
       {estadoQ.isLoading ? (

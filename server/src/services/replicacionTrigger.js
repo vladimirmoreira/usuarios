@@ -13,6 +13,7 @@
 const ReplicacionModel = require('../models/replicacion.model');
 const ReplicacionJob = require('../jobs/replicacion.job');
 const ConfiguracionModel = require('../models/configuracion.model');
+const { query } = require('../config/firebird');
 const logger = require('../utils/logger');
 
 const CACHE_MS = 60_000;
@@ -47,4 +48,26 @@ function dispararVarios(idusers = []) {
   for (const u of idusers) dispararReplicacion(u);
 }
 
-module.exports = { dispararReplicacion, dispararVarios };
+/**
+ * Marca un rol como pendiente de propagar a sucursales (recordatorio en el menú
+ * Replicación). NO encola a los usuarios: eso se ejecuta manual desde la vista.
+ * Best-effort, gateado por el flag REPLICAR.
+ * @param {number} idperfil  idtipo_usuario
+ */
+async function marcarRolParaPropagar(idperfil) {
+  try {
+    const id = Number(idperfil);
+    if (!Number.isInteger(id) || id <= 0) return;
+    if (!(await replicarHabilitado())) return;
+    let desc = null;
+    try {
+      const r = await query('system', 'SELECT descripcion FROM tipo_usuario WHERE idtipo_usuario = ?', [id]);
+      desc = r[0]?.descripcion || null;
+    } catch (_) { /* descripcion opcional */ }
+    await ReplicacionModel.marcarRolPendiente(id, desc);
+  } catch (e) {
+    logger.warn({ err: e?.message, idperfil }, 'marcarRolParaPropagar (best-effort)');
+  }
+}
+
+module.exports = { dispararReplicacion, dispararVarios, marcarRolParaPropagar };

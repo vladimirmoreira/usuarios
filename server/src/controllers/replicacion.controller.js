@@ -97,6 +97,41 @@ const ReplicacionController = {
       res.json({ ok: true, encolados });
     } catch (e) { next(e); }
   },
+
+  /** GET /replicacion/roles-pendientes — roles marcados para propagar a sucursales. */
+  async rolesPendientes(_req, res, next) {
+    try {
+      res.json(await ReplicacionModel.listarRolesPendientes());
+    } catch (e) { next(e); }
+  },
+
+  /** GET /replicacion/progreso — jobs abiertos (PENDIENTE+PROCESANDO), para la barra. */
+  async progreso(_req, res, next) {
+    try {
+      res.json({ abierto: await ReplicacionModel.contadorAbierto() });
+    } catch (e) { next(e); }
+  },
+
+  /**
+   * POST /replicacion/rol/:idtipo/propagar — encola a TODOS los usuarios activos del rol
+   * a los destinos activos (con dedupe) y drena en lotes con throttling. Quita el recordatorio.
+   */
+  async propagarRol(req, res, next) {
+    try {
+      const idtipo = Number(req.params.idtipo);
+      const usuarios = await ReplicacionModel.usuariosDeRol(idtipo);
+      let encolados = 0;
+      for (const u of usuarios) {
+        encolados += await ReplicacionModel.encolar({ iduser: u, operacion: 'PROPAGAR_ROL' });
+      }
+      await ReplicacionModel.quitarRolPendiente(idtipo);
+      await auditar(req, `ROL-${idtipo}`, OP.MIGRAR_DATOS,
+        `Propagación rol ${idtipo}: ${usuarios.length} usuario(s), ${encolados} job(s) encolado(s)`);
+      // Drenado masivo en background con throttling (no bloquea la respuesta).
+      ReplicacionJob.drenarTodo().catch(() => {});
+      res.json({ ok: true, usuarios: usuarios.length, encolados });
+    } catch (e) { next(e); }
+  },
 };
 
 module.exports = ReplicacionController;

@@ -11,6 +11,12 @@ router.use(requireAuthorized);
 
 router.get('/estado', ctrl.estado);
 router.get('/cola', ctrl.cola);
+router.get('/progreso', ctrl.progreso);
+router.get('/roles-pendientes', ctrl.rolesPendientes);
+
+router.post('/rol/:idtipo/propagar',
+  validate({ params: z.object({ idtipo: z.coerce.number().int().positive() }) }),
+  ctrl.propagarRol);
 
 router.post('/cola/:id/reintentar',
   validate({ params: z.object({ id: z.coerce.number().int().positive() }) }),

@@ -395,6 +395,16 @@ async function migrarDDL() {
     `CREATE GENERATOR GEN_REPLICACION_COLA`,
     `CREATE INDEX IDX_REPL_COLA_ESTADO ON replicacion_cola (ESTADO)`,
     `CREATE INDEX IDX_REPL_COLA_DEST   ON replicacion_cola (IDSUCURSAL)`,
+
+    // REPLICACION_ROL_PENDIENTE: recordatorio de "rol cambiado, pendiente de propagar a
+    // sucursales". Se marca al editar el template de un rol; se ejecuta manualmente desde el
+    // menú Replicación (encola a todos los usuarios del rol, con throttling y barra de progreso).
+    `CREATE TABLE replicacion_rol_pendiente (
+       IDTIPO_USUARIO INTEGER      NOT NULL,
+       DESCRIPCION    VARCHAR(60),
+       FECHA          TIMESTAMP,
+       CONSTRAINT PK_REPL_ROL_PEND PRIMARY KEY (IDTIPO_USUARIO)
+     )`,
   ];
 
   const runDDL = (scope, statements) =>

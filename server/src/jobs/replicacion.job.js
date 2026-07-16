@@ -75,6 +75,19 @@ async function intervaloMs() {
   return Math.max(1, Number(min) || 15) * 60 * 1000;
 }
 
+/**
+ * Drena la cola COMPLETA en lotes con throttling (para propagaciones masivas de rol).
+ * Corre en background (no se debe await desde el request). Frena si no queda nada.
+ */
+async function drenarTodo({ maxCiclos = 1000, pausaMs = 300 } = {}) {
+  for (let i = 0; i < maxCiclos; i++) {
+    const s = await drenar(20);
+    if (s && s.skipped) { await new Promise((r) => setTimeout(r, pausaMs)); continue; }
+    if (!s || !s.procesados) break; // cola vacía
+    await new Promise((r) => setTimeout(r, pausaMs)); // throttle entre lotes
+  }
+}
+
 async function ciclo() {
   await drenar();
   // Purga de ENVIADO fuera de la ventana de retención (best-effort).
@@ -100,4 +113,4 @@ function start() {
   return { stop: () => { detenido = true; if (timer) clearTimeout(timer); } };
 }
 
-module.exports = { start, drenar };
+module.exports = { start, drenar, drenarTodo };

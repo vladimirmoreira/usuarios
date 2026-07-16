@@ -478,8 +478,19 @@ export type ReplicacionJob = {
   fecha_proc:   string | null;
 };
 
+export type RolPendiente = {
+  idtipo_usuario: number;
+  descripcion: string | null;
+  fecha: string | null;
+  usuarios: number;
+};
+
 export const ReplicacionAPI = {
   estado: () => api.get<{ destinos: ReplicacionDestino[] }>('/replicacion/estado').then((r) => r.data),
+  rolesPendientes: () => api.get<RolPendiente[]>('/replicacion/roles-pendientes').then((r) => r.data),
+  progreso: () => api.get<{ abierto: number }>('/replicacion/progreso').then((r) => r.data),
+  propagarRol: (idtipo: number) =>
+    api.post<{ ok: boolean; usuarios: number; encolados: number }>(`/replicacion/rol/${idtipo}/propagar`).then((r) => r.data),
   cola:   (p: { idsucursal?: number; estado?: number } = {}) =>
     api.get<ReplicacionJob[]>('/replicacion/cola', { params: p }).then((r) => r.data),
   reintentar:        (id: number) => api.post(`/replicacion/cola/${id}/reintentar`).then((r) => r.data),

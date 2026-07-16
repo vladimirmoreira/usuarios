@@ -71,6 +71,15 @@ const ReplicacionModel = {
     );
   },
 
+  /** Cuenta de jobs "abiertos" (PENDIENTE + PROCESANDO) — para la barra de progreso. */
+  async contadorAbierto() {
+    const rows = await query(
+      'server',
+      `SELECT COUNT(*) AS n FROM replicacion_cola WHERE estado IN (?, ?)`,
+      [ESTADO.PENDIENTE, ESTADO.PROCESANDO]);
+    return Number(rows[0]?.n) || 0;
+  },
+
   /** Reencola un job (ERROR/BLOQUEADO → PENDIENTE) para que el worker lo reintente. */
   async reintentar(id) {
     return transaction('server', async (tx) => {
@@ -168,6 +177,57 @@ const ReplicacionModel = {
       }
     });
     return objetivos.length;
+  },
+
+  // ── Recordatorios de propagación de rol ─────────────────────────────────
+
+  /** Marca (upsert) un rol como pendiente de propagar a sucursales. */
+  async marcarRolPendiente(idtipo, descripcion = null) {
+    const id = Number(idtipo);
+    if (!Number.isInteger(id) || id <= 0) return 0;
+    return transaction('server', async (tx) => {
+      const ex = await tx.query(
+        'SELECT 1 FROM replicacion_rol_pendiente WHERE idtipo_usuario = ?', [id]);
+      if (ex.length) {
+        await tx.query(
+          'UPDATE replicacion_rol_pendiente SET descripcion = ?, fecha = CURRENT_TIMESTAMP WHERE idtipo_usuario = ?',
+          [descripcion, id]);
+      } else {
+        await tx.query(
+          'INSERT INTO replicacion_rol_pendiente (idtipo_usuario, descripcion, fecha) VALUES (?, ?, CURRENT_TIMESTAMP)',
+          [id, descripcion]);
+      }
+      return 1;
+    });
+  },
+
+  /** Lista los roles pendientes de propagar, con la cantidad de usuarios activos de cada uno. */
+  async listarRolesPendientes() {
+    const roles = await query(
+      'server',
+      'SELECT idtipo_usuario, descripcion, fecha FROM replicacion_rol_pendiente ORDER BY fecha DESC');
+    // Contar usuarios activos por rol (en la BD system).
+    for (const r of roles) {
+      const c = await query(
+        'system',
+        'SELECT COUNT(*) AS n FROM usuario WHERE idtipo_usuario = ? AND COALESCE(estado,0) = 1',
+        [r.idtipo_usuario]).catch(() => [{ n: 0 }]);
+      r.usuarios = Number(c[0]?.n) || 0;
+    }
+    return roles;
+  },
+
+  async quitarRolPendiente(idtipo) {
+    return query('server', 'DELETE FROM replicacion_rol_pendiente WHERE idtipo_usuario = ?', [Number(idtipo)]);
+  },
+
+  /** IDs de usuarios activos de un rol (BD system). */
+  async usuariosDeRol(idtipo) {
+    const rows = await query(
+      'system',
+      'SELECT iduser FROM usuario WHERE idtipo_usuario = ? AND COALESCE(estado,0) = 1',
+      [Number(idtipo)]);
+    return rows.map((r) => String(r.iduser).trim());
   },
 
   /**
