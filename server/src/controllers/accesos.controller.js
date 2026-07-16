@@ -3,12 +3,16 @@
 const AccesosService = require('../services/accesos.service');
 const MasterSyncService = require('../services/masterSync.service');
 const { auditar, OP } = require('../utils/audit');
+const { dispararReplicacion } = require('../services/replicacionTrigger');
 
 const empresaDe = (req) => req.user?.idempresa;
 const ipDe = (req) => req.headers['x-client-ip'] || req.ip;
 
-const aud = (req, iduser, detalle) =>
-  auditar(req, iduser, OP.ACTUALIZAR_CUENTA, `Accesos: ${detalle}`);
+// Se llama en TODAS las mutaciones de accesos → punto único para auditar + auto-replicar.
+const aud = (req, iduser, detalle) => {
+  dispararReplicacion(iduser); // auto-replicación (best-effort, gateada por flag REPLICAR)
+  return auditar(req, iduser, OP.ACTUALIZAR_CUENTA, `Accesos: ${detalle}`);
+};
 
 const AccesosController = {
   async obtenerAccesos(req, res, next) {

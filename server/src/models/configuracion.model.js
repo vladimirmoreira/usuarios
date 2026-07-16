@@ -170,6 +170,17 @@ const ConfiguracionModel = {
       return Math.min(8760, Math.max(1, n));
     } catch (_) { return 48; }
   },
+
+  /** true si el flag REPLICAR (primera fila) está activo. Tolera columna ausente. */
+  async replicarHabilitado() {
+    try {
+      const rows = await query(
+        'server',
+        `SELECT FIRST 1 COALESCE(replicar, 0) AS r FROM configuracion_usuario ORDER BY ip`,
+      );
+      return Number(rows[0]?.r) === 1;
+    } catch (_) { return false; }
+  },
 };
 
 module.exports = ConfiguracionModel;

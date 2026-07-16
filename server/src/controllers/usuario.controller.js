@@ -11,6 +11,7 @@ const OperacionesService = require('../services/operaciones.service');
 const { auditar, OP } = require('../utils/audit');
 const { query }       = require('../config/firebird');
 const logger          = require('../utils/logger');
+const { dispararReplicacion, dispararVarios } = require('../services/replicacionTrigger');
 
 const ipDe = (req) => req.headers['x-client-ip'] || req.ip;
 const rptDe = (req) => req.user?.iduser || 'SYSTEM';
@@ -99,6 +100,7 @@ const UsuarioController = {
       if (hasta_vigencia) {
         try { await UsuarioModel.setVigencia(rest.iduser, hasta_vigencia); } catch (_) { /* no bloquea el alta */ }
       }
+      dispararReplicacion(rest.iduser); // auto-replicación (best-effort)
       res.status(201).json(result);
     } catch (e) { next(e); }
   },
@@ -132,6 +134,7 @@ const UsuarioController = {
       if ('hasta_vigencia' in req.body) {
         try { await UsuarioModel.setVigencia(req.params.iduser, req.body.hasta_vigencia || null); } catch (_) { /* no bloquea */ }
       }
+      dispararReplicacion(req.params.iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -141,6 +144,7 @@ const UsuarioController = {
       const r = await OperacionesService.bajaUsuario({
         iduser: req.params.iduser, rptUser: rptDe(req), ip: ipDe(req),
       });
+      dispararReplicacion(req.params.iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -150,6 +154,7 @@ const UsuarioController = {
       const r = await OperacionesService.reactivar({
         iduser: req.params.iduser, rptUser: rptDe(req), ip: ipDe(req),
       });
+      dispararReplicacion(req.params.iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -163,6 +168,7 @@ const UsuarioController = {
       const r = await OperacionesService.vincularLegajo({
         iduser, documento: u.documento, rptUser: rptDe(req), ip: ipDe(req),
       });
+      dispararReplicacion(iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -172,6 +178,7 @@ const UsuarioController = {
       const r = await OperacionesService.resetClave({
         iduser: req.params.iduser, rptUser: rptDe(req), ip: ipDe(req),
       });
+      dispararReplicacion(req.params.iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -191,6 +198,7 @@ const UsuarioController = {
         iduser: req.params.iduser, codigo: req.body.codigo, nuevaClave: req.body.nuevaClave,
         rptUser: rptDe(req), ip: ipDe(req),
       });
+      dispararReplicacion(req.params.iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -201,6 +209,7 @@ const UsuarioController = {
         iduser: req.params.iduser, rptUser: rptDe(req), ip: ipDe(req),
         idsucursal: req.body.idsucursal,
       });
+      dispararReplicacion(req.params.iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -211,6 +220,7 @@ const UsuarioController = {
         iduser: req.params.iduser, rptUser: rptDe(req), ip: ipDe(req),
         idperfil: req.body.idperfil,
       });
+      dispararReplicacion(req.params.iduser);
       res.json(r);
     } catch (e) { next(e); }
   },
@@ -478,6 +488,8 @@ const UsuarioController = {
         }];
       }
 
+      // Auto-replicación de los usuarios efectivamente importados (best-effort).
+      dispararVarios(importados.map((i) => i.iduser).filter(Boolean));
       res.json({ ok: true, importados, erroresEjecucion });
     } catch (e) { next(e); }
   },
