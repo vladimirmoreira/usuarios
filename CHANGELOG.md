@@ -58,6 +58,9 @@ motor en Node con cola resiliente. **Desplegado en producción.**
   `USUARIO_CONCEPTO` (tipomovimiento + opcionales).
 - **Roles como dependencia previa**: `escribirSystem` hace upsert de `TIPO_USUARIO` antes del
   `USUARIO` (satisface la FK y sincroniza el rol).
+- **Cascada profunda del legajo**: antes de `GG_MESERO` se garantizan en orden de FK
+  `PROFESION/PAIS/CIUDAD→DEPGEOGRAFICO/BARRIO→CIUDAD/RH_ESTUDIO → RH_PERSONA → RH_DPTO → RH_CARGO`,
+  replicándolas de central si faltan (best-effort). La introspección excluye columnas computadas.
 - **Enganche automático**: `services/replicacionTrigger.js` — tras alta/baja/permisos/etc. se
   encola y drena la replicación del usuario (best-effort, gateado por `REPLICAR`).
 - **Propagar rol**: al editar un rol se marca un recordatorio (`REPLICACION_ROL_PENDIENTE`); en el
@@ -69,10 +72,6 @@ motor en Node con cola resiliente. **Desplegado en producción.**
 - `CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION` ahora se lee bien de la BD (fix del alias `MIN`
   reservado en dialect 3 que lo dejaba siempre en el default).
 
-### Pendiente — Replicación etapa 2b
-
-- Cascada profunda del legajo (`RH_CARGO → RH_DPTO → PROFESION/CIUDAD/PAIS/BARRIO/ESTUDIO`): hoy si
-  falta una dependencia se anula/omite y se marca BLOQUEADO, en vez de replicarla.
 
 ---
 

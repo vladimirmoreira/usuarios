@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LogOut, Users, ShieldCheck, UserCog, Settings, UserMinus, Sun, Moon, BarChart2, ScrollText, Radio } from 'lucide-react';
+import { LogOut, Users, ShieldCheck, UserCog, Settings, UserMinus, Sun, Moon, BarChart2, ScrollText, Radio, BookOpen } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { useTheme } from '../../auth/ThemeContext';
@@ -146,6 +146,20 @@ export default function AppLayout() {
                   {alertas > 99 ? '99+' : alertas}
                 </span>
               )}
+            </NavLink>
+          )}
+          {puedeVerConfig && (
+            <NavLink
+              to="/documentacion"
+              className={({ isActive }) =>
+                `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                  isActive
+                    ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
+                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                }`
+              }
+            >
+              <BookOpen className="h-4 w-4" /> Documentación
             </NavLink>
           )}
         </nav>
