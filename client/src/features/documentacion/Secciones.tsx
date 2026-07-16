@@ -6,14 +6,17 @@ export type Bloque =
   | { t: 'p'; texto: string }
   | { t: 'sub'; texto: string }
   | { t: 'ul'; items: string[] }
-  | { t: 'tabla'; head: string[]; filas: string[][] };
+  | { t: 'tabla'; head: string[]; filas: string[][] }
+  | { t: 'pasos'; items: string[] }
+  | { t: 'img'; svg: string; caption?: string };
 
 export type Seccion = { id: string; titulo: string; icon: any; bloques: Bloque[] };
 
 function textoDe(s: Seccion): string {
   return (s.titulo + ' ' + s.bloques.map((b) =>
     b.t === 'p' || b.t === 'sub' ? b.texto
-      : b.t === 'ul' ? b.items.join(' ')
+      : b.t === 'ul' || b.t === 'pasos' ? b.items.join(' ')
+      : b.t === 'img' ? (b.caption || '')
       : [...b.head, ...b.filas.flat()].join(' ')).join(' ')).toLowerCase();
 }
 
@@ -27,6 +30,23 @@ export function Bloques({ bloques }: { bloques: Bloque[] }) {
           <ul key={i} className="list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-300">
             {b.items.map((it, j) => <li key={j}>{it}</li>)}
           </ul>
+        );
+        if (b.t === 'pasos') return (
+          <ol key={i} className="space-y-1.5 text-sm text-zinc-600 dark:text-zinc-300">
+            {b.items.map((it, j) => (
+              <li key={j} className="flex gap-2.5">
+                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-600 text-[11px] font-bold text-white">{j + 1}</span>
+                <span>{it}</span>
+              </li>
+            ))}
+          </ol>
+        );
+        if (b.t === 'img') return (
+          <figure key={i} className="my-1">
+            <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700"
+              dangerouslySetInnerHTML={{ __html: b.svg }} />
+            {b.caption && <figcaption className="mt-1 text-center text-xs text-zinc-400">{b.caption}</figcaption>}
+          </figure>
         );
         return (
           <div key={i} className="overflow-x-auto">
