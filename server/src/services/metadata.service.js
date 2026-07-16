@@ -569,4 +569,4 @@ async function ejecutar() {
   return { ok: true, detalle };
 }
 
-module.exports = { obtenerEstado, ejecutar };
+module.exports = { obtenerEstado, ejecutar, migrarDDL };
