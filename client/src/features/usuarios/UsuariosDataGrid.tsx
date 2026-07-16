@@ -181,7 +181,7 @@ export default function UsuariosDataGrid({ data, perfiles, perfilesMaster, selec
       },
     },
     {
-      id: 'acciones', header: '', enableSorting: false, enableColumnFilter: false,
+      id: 'acciones', header: 'Acciones', enableSorting: false, enableColumnFilter: false,
       cell: ({ row: { original: u } }) => {
         if (multiSelect) return null;
         const inactivo = u.estado !== 1 && u.estado !== 2;

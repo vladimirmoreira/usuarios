@@ -84,6 +84,19 @@ const SECCIONES: Seccion[] = [
     id: 'panel', titulo: 'El panel principal', icon: LayoutDashboard,
     bloques: [
       { t: 'p', texto: 'A la izquierda está el menú. Según tus permisos verás algunas o todas estas opciones: Usuarios, Incidencias, Roles, Auditoría, Reportes y —solo administradores— Configuración, Replicación y Documentación. Tutorial está disponible para todos.' },
+      { t: 'sub', texto: 'Acciones rápidas en la lista de usuarios' },
+      { t: 'p', texto: 'En la grilla de Usuarios, la columna "Acciones" tiene botones (pasá el mouse para ver el nombre):' },
+      { t: 'tabla', head: ['Botón', 'Qué hace'], filas: [
+        ['Accesos', 'Configura permisos, menú, PDV, conceptos, sucursales y depósitos del usuario.'],
+        ['Modificar', 'Edita nombre, apellido, documento, foto y vigencia (o asigna perfil si está sin rol).'],
+        ['Reiniciar clave', 'Reinicia la contraseña del usuario.'],
+        ['Historial', 'Muestra las acciones registradas de ese usuario.'],
+        ['Sucursal', 'Reasigna la sucursal predeterminada.'],
+        ['Vincular a Legajo', 'Asocia el usuario a una persona de RRHH (visible con Gastronomía).'],
+        ['Reactivar', 'Vuelve a habilitar un usuario dado de baja.'],
+        ['Dar de baja', 'Inhabilita el usuario (no se borra).'],
+      ] },
+      { t: 'p', texto: 'Arriba, la barra tiene: Nuevo usuario, Importar, Exportar y Selección múltiple (para acciones masivas: baja, reiniciar clave o reasignar sucursal a varios a la vez).' },
     ],
   },
   {
@@ -102,7 +115,25 @@ const SECCIONES: Seccion[] = [
       { t: 'p', texto: 'Nota: la opción "Sin Rol" solo aparece si en Configuración está activo el permiso "Crear usuarios Sin Rol".' },
     ],
   },
-  { id: 'roles', titulo: '2. Roles (crear, editar, permisos)', icon: UserCog, bloques: proximamente('Alta de rol, plantilla de permisos, edición y baja.') },
+  {
+    id: 'roles', titulo: '2. Roles (crear, editar, permisos)', icon: UserCog,
+    bloques: [
+      { t: 'p', texto: 'Un rol (perfil) es una plantilla: define los permisos que heredan los usuarios que se crean con él. Se gestionan desde el menú Roles.' },
+      { t: 'pasos', items: [
+        'Presioná "Nuevo rol", poné una descripción (ej. Encargado de Ventas) y el tipo (Gestión o PDV).',
+        'Guardá: se crea el rol y su usuario-plantilla.',
+        'Con "Editar permisos" configurá qué puede hacer el rol (permisos, menú, PDV, conceptos, sucursales, depósitos).',
+        'Los usuarios que crees con ese rol copiarán esa plantilla.',
+      ] },
+      { t: 'sub', texto: 'Acciones rápidas en la lista de roles' },
+      { t: 'tabla', head: ['Botón', 'Qué hace'], filas: [
+        ['Editar permisos', 'Ajusta la plantilla del rol: permisos, menú, PDV, conceptos, sucursales, depósitos y accesos master.'],
+        ['Editar rol', 'Cambia la descripción, el tipo, el estado y las opciones (incluido "Usuario PDV").'],
+        ['Desactivar rol', 'Inhabilita el rol (estado 0); deja de ofrecerse al crear usuarios.'],
+      ] },
+      { t: 'p', texto: 'Importante: no solo el editor cambia datos — cada botón de acción hace su tarea directa. Si cambiás la plantilla de un rol, para llevar ese cambio a los usuarios ya creados se usa "Propagar" desde el menú Replicación.' },
+    ],
+  },
   {
     id: 'usuario-con-rol', titulo: '3. Crear un usuario con Rol', icon: UserCheck,
     bloques: [
@@ -134,7 +165,7 @@ const SECCIONES: Seccion[] = [
       ...op('Eliminación de huella (op. 4)', 'Borra la huella biométrica asociada al legajo del usuario.', 'op 4 "Eliminación de Huella" — ej. «cargoID:123».'),
       ...op('Exclusión de cuenta (op. 9)', 'Marca permisos excluidos puntualmente sin cambiar el rol.', 'op 9 "Exclusion de Cuenta".'),
       ...op('Migración / Replicación (op. 10)', 'Encola/replica el usuario a las sucursales, propaga un rol o reintenta envíos.', 'op 10 "Migración de Datos" — ej. «Propagación rol 7: 62 usuario(s)».'),
-      { t: 'p', texto: 'Nota: el ingreso al sistema (login) también se registra (actualmente bajo la op. 12 "Actualización de Menús"), con la empresa e IP.' },
+      { t: 'p', texto: 'Nota: el ingreso al sistema también se registra — op. 12 "Inicio de Sesión" (y op. 13 "Intento de Login Fallido" cuando la credencial es inválida), con la empresa e IP.' },
     ],
   },
   { id: 'importacion', titulo: '4. Importación masiva de usuarios', icon: Upload, bloques: proximamente('Carga desde archivo, validaciones y archivo de errores.') },

@@ -140,6 +140,8 @@ const TIPO_OPERACION = [
   [9,  'Exclusion de Cuenta'],
   [10, 'Migración de Datos'],
   [11, 'Re-Activar Cuenta'],
+  [12, 'Inicio de Sesión'],          // OP.LOGIN (reemplaza el legacy "Actualizacion de Menus")
+  [13, 'Intento de Login Fallido'],  // OP.LOGIN_FALLIDO
 ];
 
 // ── Estado ───────────────────────────────────────────────────────────────────
