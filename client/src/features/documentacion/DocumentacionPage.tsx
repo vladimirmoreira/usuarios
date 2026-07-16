@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   BookOpen, Search, Database, Clock, Radio, GitBranch, Users, ListChecks, Layers, X,
+  Sliders, Wrench, Lock,
 } from 'lucide-react';
 
 /* ── Modelo de contenido (permite render + búsqueda) ───────────────────── */
@@ -38,6 +39,27 @@ const SECCIONES: Seccion[] = [
         ['Replicación', 'Cada TEMPORIZADOR_REPLICACION min (default 15)', 'Red de seguridad: reprocesa la cola de replicación pendiente (destinos que estuvieron caídos) y purga los envíos exitosos vencidos.'],
       ] },
       { t: 'p', texto: 'El worker de Replicación NO es el que replica en el momento normal (eso es inmediato al guardar). Es una red de seguridad de reintentos: su intervalo se lee de CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION en cada ciclo, así se ajusta desde Configuración sin reiniciar el servidor.' },
+      { t: 'p', texto: 'Cada job puede apagarse por variable de entorno (ENABLE_..._JOB=0) y su horario ajustarse por cron (VIGENCIA_CRON, etc.). La zona horaria por defecto es America/Asuncion.' },
+    ],
+  },
+  {
+    id: 'configuracion', titulo: 'Parámetros de configuración (flags)', icon: Sliders,
+    bloques: [
+      { t: 'p', texto: 'La tabla CONFIGURACION_USUARIO guarda una fila por instalación (identificada por IP) con interruptores (flags 0/1) y parámetros que cambian el comportamiento del módulo. Se editan desde el menú Configuración. Solo los ve/edita el usuario ADMIN o el listado en AUTORIZADO.' },
+      { t: 'tabla', head: ['Parámetro', 'Efecto'], filas: [
+        ['LEGAJO', 'Habilita la vinculación con legajos de RRHH (rh_persona / rh_cargo). Si está apagado, el mesero puede no tener persona/cargo.'],
+        ['GASTRONOMIA', 'Habilita el módulo PDV / meseros (gg_mesero). Si está apagado, oculta esa parte.'],
+        ['BIOMETRICO', 'Habilita el manejo de huellas de acceso (rh_cargo_bio).'],
+        ['CONTABILIDAD / TALENTO_HUMANO', 'Habilitan la replicación a la BD master (módulos Contab. / RRHH).'],
+        ['CREAR_SIN_ROL', 'Permite crear usuarios "Sin Rol" (sin plantilla de permisos).'],
+        ['CLONAR', 'Muestra el botón "Clonar accesos a otra empresa" en el editor de usuario.'],
+        ['REPLICAR', 'Activa el módulo de Replicación: menú, botón "Replicar", recordatorios de rol y badge de alerta.'],
+        ['TEMPORIZADOR_REPLICACION', 'Minutos entre ciclos del worker de replicación (default 15).'],
+        ['RETENCION_REPLICACION_HORAS', 'Horas que se conservan los envíos exitosos antes de purgarlos de la lista (default 48).'],
+        ['DIAS_INACTIVIDAD', 'Umbral (en días) para considerar a un usuario inactivo (default 90).'],
+        ['AUTORIZADO', 'Usuario (además de ADMIN) habilitado a ver/editar Configuración, Replicación y Documentación.'],
+        ['METADATA_EJECUTADO', 'Cerrojo: 1 = la inicialización de metadatos ya se ejecutó.'],
+      ] },
     ],
   },
   {
@@ -105,6 +127,22 @@ const SECCIONES: Seccion[] = [
     ],
   },
   {
+    id: 'operaciones', titulo: 'Operaciones sobre usuarios', icon: Wrench,
+    bloques: [
+      { t: 'p', texto: 'Cada cambio sobre un usuario queda auditado en HISTORIAL_USUARIO y, si el flag REPLICAR está activo, dispara la replicación automática a las sucursales (solo el usuario tocado).' },
+      { t: 'tabla', head: ['Operación', 'Qué hace'], filas: [
+        ['Alta', 'Crea el usuario (copia la plantilla del rol) o lo crea "Sin Rol". Alta masiva por importación disponible.'],
+        ['Baja / Reactivar', 'Inhabilita (estado 0) o rehabilita el usuario. La baja se replica: el usuario queda inactivo también en la sucursal.'],
+        ['Reset de clave', 'Reinicia la contraseña; también actualiza el código del vendedor/mesero si corresponde.'],
+        ['Reasignar sucursal', 'Cambia la sucursal predeterminada y reordena las demás (orden 1 = la elegida).'],
+        ['Cambiar perfil', 'Cambia el rol del usuario y el tipo de mesero asociado.'],
+        ['Vincular legajo', 'Asocia el usuario a una persona de RRHH por documento.'],
+        ['Corregir datos', 'Actualiza nombre, apellido, documento y foto.'],
+        ['Exclusión', 'Excluye permisos puntuales sin cambiar el rol.'],
+      ] },
+    ],
+  },
+  {
     id: 'metadata', titulo: 'Inicialización de metadatos', icon: ListChecks,
     bloques: [
       { t: 'p', texto: 'Operación de una sola vez por instalación que puebla los catálogos de referencia que el módulo necesita (permisos generales, PDV, conceptos, tipos de usuario y de operación). Solo la ejecuta un usuario ADMIN o el AUTORIZADO.' },
@@ -112,20 +150,51 @@ const SECCIONES: Seccion[] = [
     ],
   },
   {
+    id: 'seguridad', titulo: 'Seguridad y consideraciones', icon: Lock,
+    bloques: [
+      { t: 'ul', items: [
+        'Autenticación por token JWT con refresh; las rutas de administración exigen ser ADMIN o AUTORIZADO.',
+        'Login multi-empresa: valida usuario global y calcula las empresas accesibles; con más de una, se elige en un combo.',
+        'Las contraseñas se guardan en texto plano por restricción del sistema legacy (Delphi). No modificar sin coordinar con Sistemas.',
+        'La CLAVE de configuración y la CLAVE_BD de los destinos nunca se exponen por la API.',
+        'El frontend se sirve por nginx; la API va por proxy inverso (mismo origen). Firebird es local al servidor.',
+        'Cada acción relevante queda auditada en HISTORIAL_USUARIO (quién, qué, cuándo).',
+      ] },
+    ],
+  },
+  {
     id: 'glosario', titulo: 'Glosario', icon: BookOpen,
     bloques: [
       { t: 'tabla', head: ['Término', 'Definición'], filas: [
+        ['Best-effort', 'Se intenta hacer; si falla, no rompe la operación principal (se registra y sigue).'],
+        ['Bloqueado', 'Estado de un envío que se replicó parcialmente porque faltó una dependencia que no se pudo resolver.'],
+        ['Cascada', 'Replicar en orden las dependencias (claves foráneas) de un dato antes de escribirlo.'],
         ['Central', 'Base de datos principal que recepciona las transacciones; los usuarios se crean acá primero.'],
-        ['Destino / Sucursal', 'Base de datos de un local, que recibe la replicación desde la central.'],
+        ['Clonar', 'Copiar los accesos de un usuario a otra empresa dentro de la misma base.'],
         ['Cola (outbox)', 'Lista de trabajos de replicación pendientes de enviar a cada destino.'],
-        ['Worker', 'Proceso en segundo plano que drena la cola y reintenta lo que quedó pendiente.'],
-        ['Job', 'Un trabajo de la cola = replicar un usuario a un destino.'],
+        ['Constraint / FK', 'Regla de integridad: una clave foránea (FK) obliga a que el ID referenciado exista en su tabla.'],
         ['Dedupe', 'Evitar encolar dos veces lo mismo mientras está pendiente.'],
-        ['Throttling', 'Procesar en lotes con pausas para no saturar los destinos.'],
-        ['Cascada', 'Replicar en orden las dependencias (FK) de un dato antes de escribirlo.'],
-        ['Bloqueado', 'Se replicó parcialmente porque faltó una dependencia que no se pudo resolver.'],
+        ['Destino / Sucursal', 'Base de datos de un local, que recibe la replicación desde la central.'],
+        ['Dialecto', 'Modo de compatibilidad de Firebird (1 o 3) que cambia sintaxis y palabras reservadas.'],
+        ['Drenar', 'Procesar los trabajos pendientes de la cola.'],
+        ['Encolar', 'Poner un trabajo en la cola para que se envíe.'],
+        ['Flag', 'Interruptor de configuración (0/1): CLONAR, REPLICAR, LEGAJO, etc.'],
+        ['Idempotente', 'Que se puede ejecutar varias veces sin efectos adicionales (ej. las migraciones de esquema).'],
+        ['Introspección', 'Leer la estructura de la BD (columnas, FKs) desde su metadata para adaptarse al esquema real.'],
+        ['Job', 'Un trabajo de la cola = replicar un usuario a un destino.'],
+        ['Legajo', 'Datos de RRHH de una persona (rh_persona) y su cargo (rh_cargo).'],
+        ['Master', 'Base de datos de los módulos Contabilidad / RRHH (opcional).'],
         ['Offset', 'Ajuste del IDSUCURSAL del mesero según el local destino.'],
-        ['Flag', 'Interruptor de configuración (0/1): CLONAR, REPLICAR, etc.'],
+        ['PDV', 'Punto de venta (módulo de gastronomía / meseros).'],
+        ['Plantilla (rol)', 'Usuario modelo de un rol del que se copian los permisos al crear usuarios.'],
+        ['Purga', 'Borrado automático de los envíos exitosos vencidos, para no acumular historial en la cola.'],
+        ['Replicar', 'Sincronizar un usuario completo a las bases de otras sucursales.'],
+        ['Retención', 'Horas que se conservan los envíos exitosos antes de purgarlos.'],
+        ['Sentinela (id 0)', 'Valor "sin referencia" (0) que representa la ausencia de un vínculo.'],
+        ['Throttling', 'Procesar en lotes con pausas para no saturar los destinos.'],
+        ['Upsert', 'Insertar la fila si no existe, o actualizarla si ya existe.'],
+        ['VPN', 'Enlace de red entre la central y las sucursales; si se cae, la cola espera y reintenta.'],
+        ['Worker', 'Proceso en segundo plano que drena la cola y reintenta lo que quedó pendiente.'],
       ] },
     ],
   },
