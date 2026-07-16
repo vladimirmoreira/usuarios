@@ -3,6 +3,10 @@ import {
   Upload, ScrollText, BarChart2, Copy, Settings, Radio,
 } from 'lucide-react';
 import { SeccionesView, type Seccion } from '../documentacion/Secciones';
+import {
+  mLogin, mPanel, mAccionesUsuario, mRoles, mImportacion, mAuditoria,
+  mReportes, mClonacion, mConfiguracion, mReplicacion,
+} from './mockups';
 
 /* ── Helpers para armar mockups SVG (vectoriales, escalan sin deformarse) ── */
 const F = (x: number, y: number, w: number, label: string, val: string, bg = '#ffffff', fg = '#0f172a') => `
@@ -74,12 +78,14 @@ const SECCIONES: Seccion[] = [
         'Si tu usuario tiene acceso a más de una empresa, elegí una en el desplegable.',
         'Si olvidaste la clave, pedí a un administrador que la reinicie.',
       ] },
+      { t: 'img', svg: mLogin, caption: 'Pantalla de ingreso.' },
     ],
   },
   {
     id: 'panel', titulo: 'El panel principal', icon: LayoutDashboard,
     bloques: [
       { t: 'p', texto: 'A la izquierda está el menú. Según tus permisos verás algunas o todas estas opciones: Usuarios, Incidencias, Roles, Auditoría, Reportes y —solo administradores— Configuración, Replicación y Documentación. Tutorial está disponible para todos.' },
+      { t: 'img', svg: mPanel, caption: 'Menú lateral + lista de usuarios. La columna Acciones (1) tiene los botones de cada fila.' },
       { t: 'sub', texto: 'Acciones rápidas en la lista de usuarios' },
       { t: 'p', texto: 'En la grilla de Usuarios, la columna "Acciones" tiene botones (pasá el mouse para ver el nombre):' },
       { t: 'tabla', head: ['Botón', 'Qué hace'], filas: [
@@ -92,6 +98,7 @@ const SECCIONES: Seccion[] = [
         ['Reactivar', 'Vuelve a habilitar un usuario dado de baja.'],
         ['Dar de baja', 'Inhabilita el usuario (no se borra).'],
       ] },
+      { t: 'img', svg: mAccionesUsuario, caption: 'Los botones de la columna Acciones (pasá el mouse en la app para ver el nombre).' },
       { t: 'p', texto: 'Arriba, la barra tiene: Nuevo usuario, Importar, Exportar y Selección múltiple (para acciones masivas: baja, reiniciar clave o reasignar sucursal a varios a la vez).' },
     ],
   },
@@ -127,6 +134,7 @@ const SECCIONES: Seccion[] = [
         ['Editar rol', 'Cambia la descripción, el tipo, el estado y las opciones (incluido "Usuario PDV").'],
         ['Desactivar rol', 'Inhabilita el rol (estado 0); deja de ofrecerse al crear usuarios.'],
       ] },
+      { t: 'img', svg: mRoles, caption: 'Lista de roles con la columna Acciones (Permisos, Editar, Baja).' },
       { t: 'p', texto: 'Importante: no solo el editor cambia datos — cada botón de acción hace su tarea directa. Si cambiás la plantilla de un rol, para llevar ese cambio a los usuarios ya creados se usa "Propagar" desde el menú Replicación.' },
     ],
   },
@@ -183,6 +191,7 @@ const SECCIONES: Seccion[] = [
         'Confirmá para dar de alta las filas válidas.',
         'Si hubo errores, se genera en tu Escritorio el archivo "errImportacionUsuario_DDMMAAAA.txt" con el detalle fila por fila.',
       ] },
+      { t: 'img', svg: mImportacion, caption: 'Previsualización: cada fila se marca OK o Error antes de confirmar.' },
       { t: 'p', texto: 'El identificador (iduser) se genera automáticamente para cada usuario.' },
     ],
   },
@@ -196,6 +205,7 @@ const SECCIONES: Seccion[] = [
         'La grilla muestra: ID, Fecha, Usuario, Operación, Autorización y Observación.',
         'Podés exportar el resultado.',
       ] },
+      { t: 'img', svg: mAuditoria, caption: 'Filtros (Usuario / Operación / Fecha) y la grilla del historial.' },
       { t: 'p', texto: 'El detalle de cada tipo de operación está en el Anexo · Catálogo de operaciones.' },
     ],
   },
@@ -209,6 +219,7 @@ const SECCIONES: Seccion[] = [
         'Se muestra la ficha con sus datos (perfil, sucursales y permisos; o la plantilla del rol).',
         'Usá "Imprimir / Exportar a PDF" para guardarla o imprimirla.',
       ] },
+      { t: 'img', svg: mReportes, caption: 'Ficha de usuario, lista para imprimir o exportar a PDF.' },
     ],
   },
   {
@@ -220,6 +231,7 @@ const SECCIONES: Seccion[] = [
         'En "Clonar accesos a empresa", elegí la empresa destino.',
         'Presioná "Clonar".',
       ] },
+      { t: 'img', svg: mClonacion, caption: 'Bloque "Clonar accesos a empresa" en el editor de usuario.' },
       { t: 'p', texto: 'No copia sucursal ni depósitos (son globales del usuario). No sobrescribe si el usuario ya tiene accesos en esa empresa. El botón aparece solo si el flag CLONAR está activo. (Distinto de Replicar, que envía el usuario completo a otras sucursales.)' },
     ],
   },
@@ -232,6 +244,7 @@ const SECCIONES: Seccion[] = [
         'Empresas: qué empresas son accesibles en el login y el mapeo con la BD master.',
         'Metadatos: inicialización de catálogos, una sola vez por instalación.',
       ] },
+      { t: 'img', svg: mConfiguracion, caption: 'Pestaña Configuración: interruptores y parámetros de replicación.' },
       { t: 'p', texto: 'El detalle de cada parámetro está en Documentación → Parámetros de configuración.' },
     ],
   },
@@ -245,6 +258,7 @@ const SECCIONES: Seccion[] = [
         'Sección "Roles pendientes de propagar": botón Replicar con barra de progreso.',
         'Un badge rojo en el menú avisa si hay pendientes o errores, aunque estés en otra pantalla.',
       ] },
+      { t: 'img', svg: mReplicacion, caption: 'Roles pendientes de propagar + estado de la cola por sucursal.' },
       { t: 'p', texto: 'El funcionamiento completo (destinos, cola, cascada de dependencias) está en Documentación → Módulo de Replicación.' },
     ],
   },
