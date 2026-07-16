@@ -112,6 +112,13 @@ const ReplicacionController = {
     } catch (e) { next(e); }
   },
 
+  /** GET /replicacion/alertas — contador para el badge del menú. */
+  async alertas(_req, res, next) {
+    try {
+      res.json(await ReplicacionModel.contarAlertas());
+    } catch (e) { next(e); }
+  },
+
   /**
    * POST /replicacion/rol/:idtipo/propagar — encola a TODOS los usuarios activos del rol
    * a los destinos activos (con dedupe) y drena en lotes con throttling. Quita el recordatorio.

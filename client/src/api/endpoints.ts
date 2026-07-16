@@ -489,6 +489,7 @@ export const ReplicacionAPI = {
   estado: () => api.get<{ destinos: ReplicacionDestino[] }>('/replicacion/estado').then((r) => r.data),
   rolesPendientes: () => api.get<RolPendiente[]>('/replicacion/roles-pendientes').then((r) => r.data),
   progreso: () => api.get<{ abierto: number }>('/replicacion/progreso').then((r) => r.data),
+  alertas: () => api.get<{ jobs: number; roles: number; total: number }>('/replicacion/alertas').then((r) => r.data),
   propagarRol: (idtipo: number) =>
     api.post<{ ok: boolean; usuarios: number; encolados: number }>(`/replicacion/rol/${idtipo}/propagar`).then((r) => r.data),
   cola:   (p: { idsucursal?: number; estado?: number } = {}) =>

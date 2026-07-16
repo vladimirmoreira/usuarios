@@ -12,6 +12,7 @@ router.use(requireAuthorized);
 router.get('/estado', ctrl.estado);
 router.get('/cola', ctrl.cola);
 router.get('/progreso', ctrl.progreso);
+router.get('/alertas', ctrl.alertas);
 router.get('/roles-pendientes', ctrl.rolesPendientes);
 
 router.post('/rol/:idtipo/propagar',

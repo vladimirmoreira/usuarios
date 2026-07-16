@@ -3,7 +3,7 @@ import { LogOut, Users, ShieldCheck, UserCog, Settings, UserMinus, Sun, Moon, Ba
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { useTheme } from '../../auth/ThemeContext';
-import { ConfiguracionAPI } from '../../api/endpoints';
+import { ConfiguracionAPI, ReplicacionAPI } from '../../api/endpoints';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
@@ -24,6 +24,16 @@ export default function AppLayout() {
     staleTime: 5 * 60_000,
   });
   const puedeVerReplicacion = puedeVerConfig && (flagsQ.data?.replicar ?? false);
+
+  // Badge de alertas del menú Replicación (roles pendientes + jobs pendiente/error/bloqueado).
+  // Se refresca aunque estés en otro menú, para notar acumulaciones.
+  const alertasQ = useQuery({
+    queryKey: ['replicacion', 'alertas'],
+    queryFn: ReplicacionAPI.alertas,
+    enabled: puedeVerReplicacion,
+    refetchInterval: 30_000,
+  });
+  const alertas = alertasQ.data?.total ?? 0;
 
   const onLogout = () => { logout(); nav('/login'); };
 
@@ -128,6 +138,14 @@ export default function AppLayout() {
               }
             >
               <Radio className="h-4 w-4" /> Replicación
+              {alertas > 0 && (
+                <span
+                  title={`${alertasQ.data?.roles ?? 0} rol(es) pendiente(s) · ${alertasQ.data?.jobs ?? 0} job(s) pendiente/error/bloqueado`}
+                  className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+                >
+                  {alertas > 99 ? '99+' : alertas}
+                </span>
+              )}
             </NavLink>
           )}
         </nav>

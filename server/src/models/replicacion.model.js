@@ -71,6 +71,27 @@ const ReplicacionModel = {
     );
   },
 
+  /**
+   * Conteo de ALERTAS para el badge del menú (cosas que requieren atención o se acumulan):
+   * roles pendientes de propagar + jobs PENDIENTE/ERROR/BLOQUEADO. Excluye ENVIADO/PROCESANDO.
+   */
+  async contarAlertas() {
+    let jobs = 0;
+    let roles = 0;
+    try {
+      const j = await query(
+        'server',
+        `SELECT COUNT(*) AS n FROM replicacion_cola WHERE estado IN (?, ?, ?)`,
+        [ESTADO.PENDIENTE, ESTADO.ERROR, ESTADO.BLOQUEADO]);
+      jobs = Number(j[0]?.n) || 0;
+    } catch (_) { /* tabla puede no existir aún */ }
+    try {
+      const r = await query('server', 'SELECT COUNT(*) AS n FROM replicacion_rol_pendiente');
+      roles = Number(r[0]?.n) || 0;
+    } catch (_) { /* idem */ }
+    return { jobs, roles, total: jobs + roles };
+  },
+
   /** Cuenta de jobs "abiertos" (PENDIENTE + PROCESANDO) — para la barra de progreso. */
   async contadorAbierto() {
     const rows = await query(
