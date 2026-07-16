@@ -64,6 +64,8 @@ motor en Node con cola resiliente. **Desplegado en producción.**
   menú Replicación, botón "Replicar" encola a todos los usuarios del rol con **barra de progreso**
   y **throttling** (`drenarTodo`).
 - **UI**: columna "Master" → "Repl. Master" con tooltip (indicador de config, no de éxito).
+  Badge de alertas en el menú Replicación (roles pendientes + jobs PENDIENTE/ERROR/BLOQUEADO),
+  visible desde cualquier menú para notar acumulaciones (`GET /replicacion/alertas`, poll 30s).
 - `CONFIGURACION_USUARIO.TEMPORIZADOR_REPLICACION` ahora se lee bien de la BD (fix del alias `MIN`
   reservado en dialect 3 que lo dejaba siempre en el default).
 
