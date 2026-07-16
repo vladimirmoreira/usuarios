@@ -353,6 +353,10 @@ async function migrarDDL() {
     // RETENCION_REPLICACION_HORAS: horas que se conservan los jobs ENVIADO en la cola antes
     // de purgarlos (los ERROR/BLOQUEADO no se purgan). Editable desde Configuración. Default 48.
     `ALTER TABLE configuracion_usuario ADD RETENCION_REPLICACION_HORAS INTEGER DEFAULT 48`,
+    // HORA_INICIO / HORA_FIN ("HH:MM"): franja horaria de ingreso al módulo. NULL = sin
+    // restricción. No aplica a ADMIN. Editable desde Configuración.
+    `ALTER TABLE configuracion_usuario ADD HORA_INICIO VARCHAR(5)`,
+    `ALTER TABLE configuracion_usuario ADD HORA_FIN    VARCHAR(5)`,
     // TIPOMOVIMIENTO: campo ESTADO requerido por obtenerConceptos (WHERE estado = 1).
     // Si la tabla ya existía sin la columna, se agrega con default 1.
     `ALTER TABLE tipomovimiento ADD ESTADO SMALLINT DEFAULT 1`,

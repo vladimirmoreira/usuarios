@@ -23,6 +23,7 @@ const emptyForm: CfgForm = {
   legajo: false, biometrico: false, gastronomia: false, complementario: false,
   contabilidad: false, talento_humano: false, crear_sin_rol: true,
   clonar: false, replicar: false, temporizador_replicacion: 15, retencion_replicacion_horas: 48,
+  hora_inicio: null, hora_fin: null,
   maximo: null, ruta_archivo: null, version_nro: null, autorizado: null,
 };
 
@@ -40,6 +41,8 @@ const toForm = (r: Configuracion & { clave?: string }): CfgForm => ({
   replicar:       (r.replicar ?? 0) === 1,
   temporizador_replicacion: r.temporizador_replicacion ?? 15,
   retencion_replicacion_horas: r.retencion_replicacion_horas ?? 48,
+  hora_inicio: r.hora_inicio ?? null,
+  hora_fin: r.hora_fin ?? null,
 });
 
 const fromForm = (f: CfgForm) => {
@@ -62,6 +65,8 @@ const fromForm = (f: CfgForm) => {
       f.retencion_replicacion_horas == null || f.retencion_replicacion_horas === ('' as any)
         ? 48 : Number(f.retencion_replicacion_horas),
     maximo:         f.maximo === null || f.maximo === ('' as any) ? null : Number(f.maximo),
+    hora_inicio:    f.hora_inicio && String(f.hora_inicio).trim() ? String(f.hora_inicio).trim() : null,
+    hora_fin:       f.hora_fin && String(f.hora_fin).trim() ? String(f.hora_fin).trim() : null,
     // Omitir clave si está vacía (no cambiar la existente)
     ...(clave?.trim() ? { clave: clave.trim() } : {}),
   };
@@ -585,6 +590,25 @@ export default function ConfiguracionPage() {
                   </div>
                 </div>
               )}
+
+              {/* Franja horaria de ingreso */}
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 pt-2">Franja horaria de ingreso</p>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-2 max-w-md">
+                <div>
+                  <label className="label">Hora inicio</label>
+                  <input className="input mt-1" type="time"
+                    value={form.hora_inicio ?? ''} onChange={set('hora_inicio')} />
+                </div>
+                <div>
+                  <label className="label">Hora fin</label>
+                  <input className="input mt-1" type="time"
+                    value={form.hora_fin ?? ''} onChange={set('hora_fin')} />
+                </div>
+              </div>
+              <p className="text-xs text-zinc-400">
+                Restringe el ingreso al módulo a ese rango horario (ej. 06:00 a 20:00). Dejalo vacío para
+                sin restricción. No aplica al usuario Admin.
+              </p>
 
               {/* Autorización */}
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 pt-2">Acceso a Configuración</p>

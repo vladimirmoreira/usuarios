@@ -26,6 +26,8 @@ const cfgBody = z.object({
   replicar:      z.number().int().min(0).max(1).optional().nullable(),
   temporizador_replicacion: z.number().int().min(1).max(1440).optional().nullable(),
   retencion_replicacion_horas: z.number().int().min(1).max(8760).optional().nullable(),
+  hora_inicio: z.string().regex(/^(\d{2}:\d{2})?$/).max(5).optional().nullable(),
+  hora_fin:    z.string().regex(/^(\d{2}:\d{2})?$/).max(5).optional().nullable(),
   dias_inactividad: z.number().int().optional().nullable(),
   ruta_archivo:  z.string().max(100).optional().nullable(),
   version_nro:   z.string().max(10).optional().nullable(),

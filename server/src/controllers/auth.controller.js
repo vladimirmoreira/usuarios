@@ -2,10 +2,22 @@
 
 const bcrypt = require('bcryptjs');
 const UsuarioModel = require('../models/usuario.model');
+const ConfiguracionModel = require('../models/configuracion.model');
 const { signAccess, signRefresh, verifyRefresh } = require('../utils/jwt');
 const { auditarDirecto, OP } = require('../utils/audit');
 
 const ipDeReq = (req) => req.headers['x-client-ip'] || req.ip || '';
+
+const TZ = process.env.TZ || 'America/Asuncion';
+/** Hora actual "HH:MM" en la zona horaria configurada. */
+function horaActual() {
+  return new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour12: false }).slice(0, 5);
+}
+/** ¿`now` (HH:MM) cae dentro de [ini, fin]? Soporta franjas que cruzan medianoche. */
+function dentroFranja(now, ini, fin) {
+  if (!ini || !fin) return true;
+  return ini <= fin ? (now >= ini && now <= fin) : (now >= ini || now <= fin);
+}
 
 const AuthController = {
   /**
@@ -47,6 +59,17 @@ const AuthController = {
         auditarDirecto({ iduser: user.iduser, idoperacion: OP.LOGIN_FALLIDO, rptUser: user.iduser,
           observacion: `Vigencia vencida (${user.hasta_vigencia}) ip=${ip}` });
         return res.status(403).json({ error: 'Su acceso está vencido. Contacte al administrador.' });
+      }
+
+      // Franja horaria de ingreso. No aplica a ADMIN (para evitar quedar bloqueado de la config).
+      if (user.iduser.trim().toUpperCase() !== 'ADMIN') {
+        const fr = await ConfiguracionModel.franjaHoraria().catch(() => ({ inicio: null, fin: null }));
+        const ahora = horaActual();
+        if (!dentroFranja(ahora, fr.inicio, fr.fin)) {
+          auditarDirecto({ iduser: user.iduser, idoperacion: OP.LOGIN_FALLIDO, rptUser: user.iduser,
+            observacion: `Fuera de horario (${fr.inicio}-${fr.fin}) ahora=${ahora} ip=${ip}` });
+          return res.status(403).json({ error: `Ingreso permitido solo de ${fr.inicio} a ${fr.fin} hs.` });
+        }
       }
 
       // Empresas accesibles = usuarioempresa ∩ EMPRESAS.accesible ∩ gate del módulo.

@@ -12,6 +12,7 @@ const COLS = `ip, server, SYSTEM_BD AS SYS_CFG, MASTER_BD AS MASTER, user_bd, cl
               COALESCE(replicar, 0) AS replicar,
               COALESCE(temporizador_replicacion, 15) AS temporizador_replicacion,
               COALESCE(retencion_replicacion_horas, 48) AS retencion_replicacion_horas,
+              hora_inicio, hora_fin,
               metadata_ejecutado`;
 
 const ConfiguracionModel = {
@@ -37,8 +38,8 @@ const ConfiguracionModel = {
             complementario, ruta_archivo, version_nro, autorizado,
             contabilidad, talento_humano, dias_inactividad, crear_sin_rol,
             clonar, replicar, temporizador_replicacion, retencion_replicacion_horas,
-            metadata_ejecutado)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            hora_inicio, hora_fin, metadata_ejecutado)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           data.ip, data.server, data.sys_cfg, data.master, data.user_bd, data.clave,
           data.legajo ?? 0, data.biometrico ?? 0, data.gastronomia ?? 0,
@@ -47,7 +48,8 @@ const ConfiguracionModel = {
           data.contabilidad ?? 0, data.talento_humano ?? 0,
           data.dias_inactividad ?? 90, data.crear_sin_rol ?? 1,
           data.clonar ?? 0, data.replicar ?? 0, data.temporizador_replicacion ?? 15,
-          data.retencion_replicacion_horas ?? 48, data.metadata_ejecutado ?? 0,
+          data.retencion_replicacion_horas ?? 48,
+          data.hora_inicio ?? null, data.hora_fin ?? null, data.metadata_ejecutado ?? 0,
         ],
       );
     });
@@ -67,6 +69,7 @@ const ConfiguracionModel = {
         clonar: 'clonar', replicar: 'replicar',
         temporizador_replicacion: 'temporizador_replicacion',
         retencion_replicacion_horas: 'retencion_replicacion_horas',
+        hora_inicio: 'hora_inicio', hora_fin: 'hora_fin',
         metadata_ejecutado: 'metadata_ejecutado',
       };
       const sets = [];
@@ -180,6 +183,25 @@ const ConfiguracionModel = {
       );
       return Number(rows[0]?.r) === 1;
     } catch (_) { return false; }
+  },
+
+  /**
+   * Franja horaria de ingreso al módulo (HH:MM). Devuelve { inicio, fin } o nulls si no
+   * está configurada (= sin restricción). Se toma la primera fila.
+   */
+  async franjaHoraria() {
+    try {
+      const rows = await query(
+        'server',
+        `SELECT FIRST 1 hora_inicio AS inicio, hora_fin AS fin
+           FROM configuracion_usuario ORDER BY ip`,
+      );
+      const norm = (v) => {
+        const s = (v == null ? '' : String(v)).trim();
+        return /^\d{2}:\d{2}$/.test(s) ? s : null;
+      };
+      return { inicio: norm(rows[0]?.inicio), fin: norm(rows[0]?.fin) };
+    } catch (_) { return { inicio: null, fin: null }; }
   },
 };
 

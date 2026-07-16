@@ -429,6 +429,8 @@ export type Configuracion = {
   replicar:        number | null;
   temporizador_replicacion: number | null;
   retencion_replicacion_horas: number | null;
+  hora_inicio: string | null;
+  hora_fin: string | null;
   metadata_ejecutado?: number | null;
 };
 
