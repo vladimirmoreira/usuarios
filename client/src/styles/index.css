@@ -47,20 +47,64 @@
 }
 
 /* ── Impresión: ocultar sidebar/header y forzar fondo claro para fichas ── */
+/* Portada/índice del manual: ocultos en pantalla, visibles al imprimir */
+.print-only { display: none; }
+
 @media print {
-  @page { size: A4; margin: 12mm; }
-  body { background: white !important; color: black !important; }
+  @page {
+    size: A4;
+    margin: 22mm 20mm 20mm 20mm;
+  }
+  body { background: white !important; color: #1e293b !important; }
   aside, header { display: none !important; }
   main { padding: 0 !important; background: white !important; }
   .print\:hidden { display: none !important; }
   .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
-  /* Documentación / Tutorial impreso */
+
+  /* Documentación / Tutorial como material impreso */
   .no-print { display: none !important; }
+  .print-only { display: block; }
   .doc-print { max-width: none !important; }
+
+  /* Portada */
+  .manual-cover {
+    break-after: page; text-align: center; padding-top: 70mm;
+  }
+  .manual-cover .mc-mark {
+    width: 56px; height: 56px; margin: 0 auto 22px; border-radius: 14px;
+    background: #4f46e5; color: #fff; font-size: 30px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .manual-cover .mc-kicker {
+    text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: #64748b;
+  }
+  .manual-cover .mc-title { font-size: 34px; font-weight: 700; margin: 12px 0 6px; color: #0f172a; }
+  .manual-cover .mc-sub { font-size: 14px; color: #475569; }
+  .manual-cover .mc-date { margin-top: 40mm; font-size: 12px; color: #94a3b8; }
+
+  /* Índice */
+  .manual-toc { break-after: page; }
+  .manual-toc h2 {
+    font-size: 22px; font-weight: 700; color: #0f172a;
+    border-bottom: 2px solid #4f46e5; padding-bottom: 8px; margin-bottom: 16px;
+  }
+  .manual-toc ol { list-style: none; padding: 0; counter-reset: toc; }
+  .manual-toc li {
+    counter-increment: toc; font-size: 13.5px; color: #334155;
+    padding: 7px 0; border-bottom: 1px dotted #cbd5e1;
+  }
+  .manual-toc li::before { content: counter(toc) ".  "; color: #4f46e5; font-weight: 700; }
+
+  /* Secciones */
   .doc-sec {
     break-inside: avoid; page-break-inside: avoid;
-    border: 1px solid #e2e8f0 !important; background: white !important;
-    margin-bottom: 10px;
+    border: none !important; background: white !important;
+    padding: 0 !important; margin: 0 0 14px !important;
+  }
+  .doc-sec h3 {
+    font-size: 16px !important; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;
   }
   .doc-sec * { color: #1e293b !important; }
+  .doc-sec table { font-size: 11px !important; }
+  .doc-sec figure { break-inside: avoid; }
 }

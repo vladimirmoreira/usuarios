@@ -85,9 +85,25 @@ export function SeccionesView({
   );
   const irA = (id: string) => document.getElementById(`sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const imprimir = () => { setQ(''); setTimeout(() => window.print(), 150); };
+  const fecha = new Date().toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
     <div className="doc-print mx-auto max-w-5xl">
+      {/* Portada e índice: solo al imprimir / exportar a PDF */}
+      <div className="print-only manual-cover">
+        <div className="mc-mark">A</div>
+        <div className="mc-kicker">Módulo de Gestión de Usuarios</div>
+        <h1 className="mc-title">{titulo}</h1>
+        <p className="mc-sub">{subtitulo}</p>
+        <p className="mc-date">{fecha}</p>
+      </div>
+      <div className="print-only manual-toc">
+        <h2>Índice</h2>
+        <ol>
+          {secciones.map((s) => <li key={s.id}>{s.titulo}</li>)}
+        </ol>
+      </div>
+
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white">
@@ -100,8 +116,8 @@ export function SeccionesView({
         </div>
         <button onClick={imprimir}
           className="no-print inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          title="Imprimir o guardar como PDF">
-          <Printer className="h-4 w-4" /> Imprimir / PDF
+          title="Genera un manual en PDF con portada e índice (elegí “Guardar como PDF” en el diálogo)">
+          <Printer className="h-4 w-4" /> Descargar manual
         </button>
       </div>
 
