@@ -32,7 +32,8 @@ async function nonBlobCols(scope, tabla) {
     `SELECT TRIM(rf.rdb$field_name) AS name, f.rdb$field_type AS type
        FROM rdb$relation_fields rf
        JOIN rdb$fields f ON f.rdb$field_name = rf.rdb$field_source
-      WHERE rf.rdb$relation_name = ?`,
+      WHERE rf.rdb$relation_name = ?
+        AND f.rdb$computed_blr IS NULL`,
     [tabla.toUpperCase()],
   );
   const cols = rows.filter((r) => Number(r.type) !== BLOB).map((r) => String(r.name).trim());
@@ -105,7 +106,8 @@ async function metaDeConn(conn, tabla) {
             COALESCE(rf.rdb$null_flag, 0) AS notnull
        FROM rdb$relation_fields rf
        JOIN rdb$fields f ON f.rdb$field_name = rf.rdb$field_source
-      WHERE rf.rdb$relation_name = ?`, [tabla.toUpperCase()]);
+      WHERE rf.rdb$relation_name = ?
+        AND f.rdb$computed_blr IS NULL`, [tabla.toUpperCase()]);
   const map = new Map();
   for (const r of rows) {
     if (Number(r.type) === BLOB) continue;
@@ -244,14 +246,125 @@ async function escribirSystem(destino, data) {
   }
 }
 
+// ── Cascada profunda de dependencias (legajo) ───────────────────────────────
+// Se ejecuta AUTÓNOMA (con conn.query, auto-commit) ANTES de la tx del mesero, igual que
+// el SP legacy con "IN AUTONOMOUS TRANSACTION": así un fallo en una dependencia no aborta
+// la transacción principal y lo ya replicado queda commiteado.
+
+async function metaCached(conn, cache, tabla) {
+  const k = tabla.toUpperCase();
+  if (!cache.has(k)) cache.set(k, await metaDeConn(conn, tabla));
+  return cache.get(k);
+}
+
+/** Replica una fila puntual desde central al destino (upsert). Devuelve true si existía en central. */
+async function replicarFila(conn, cache, scope, tabla, pkCol, pkVal) {
+  const cols = await nonBlobCols(scope, tabla);
+  const row = (await query(scope, `SELECT FIRST 1 ${cols.join(', ')} FROM ${tabla} WHERE ${pkCol} = ?`, [pkVal]))[0];
+  if (!row) return false;
+  const meta = await metaCached(conn, cache, tabla);
+  await upsert(conn, tabla, prepararFila(row, meta), [pkCol.toUpperCase()]);
+  return true;
+}
+
+/** Garantiza que exista una fila (pk) en el destino; la replica de central si falta. Best-effort. */
+async function garantizar(conn, cache, scope, tabla, pkCol, val, bloqueos) {
+  if (!(Number(val) > 0)) return true; // sin referencia
+  const ex = await conn.query(`SELECT 1 FROM ${tabla} WHERE ${pkCol} = ?`, [val]);
+  if (ex.length) return true;
+  try {
+    const ok = await replicarFila(conn, cache, scope, tabla, pkCol, val);
+    if (!ok) bloqueos.push(`${tabla} ${val} no existe en central`);
+    return ok;
+  } catch (e) {
+    bloqueos.push(`${tabla} ${val}: ${String(e.message).slice(0, 40)}`);
+    return false;
+  }
+}
+
+/** Ciudad → DEPGEOGRAFICO (sub-cascada geográfica). */
+async function garantizarCiudad(conn, cache, idciudad, bloqueos) {
+  if (!(Number(idciudad) > 0)) return true;
+  if ((await conn.query('SELECT 1 FROM ciudad WHERE idciudad = ?', [idciudad])).length) return true;
+  const cols = await nonBlobCols('server', 'CIUDAD');
+  const row = (await query('server', `SELECT FIRST 1 ${cols.join(', ')} FROM ciudad WHERE idciudad = ?`, [idciudad]))[0];
+  if (!row) { bloqueos.push(`ciudad ${idciudad} no existe en central`); return false; }
+  await garantizar(conn, cache, 'server', 'depgeografico', 'iddepartamento', row.iddepartamento, bloqueos);
+  try { await upsert(conn, 'CIUDAD', prepararFila(row, await metaCached(conn, cache, 'CIUDAD')), ['IDCIUDAD']); return true; }
+  catch (e) { bloqueos.push(`ciudad ${idciudad}: ${String(e.message).slice(0, 40)}`); return false; }
+}
+
+/** Barrio → Ciudad (sub-cascada geográfica). */
+async function garantizarBarrio(conn, cache, idbarrio, bloqueos) {
+  if (!(Number(idbarrio) > 0)) return true;
+  if ((await conn.query('SELECT 1 FROM barrio WHERE idbarrio = ?', [idbarrio])).length) return true;
+  const cols = await nonBlobCols('server', 'BARRIO');
+  const row = (await query('server', `SELECT FIRST 1 ${cols.join(', ')} FROM barrio WHERE idbarrio = ?`, [idbarrio]))[0];
+  if (!row) { bloqueos.push(`barrio ${idbarrio} no existe en central`); return false; }
+  await garantizarCiudad(conn, cache, row.idciudad, bloqueos);
+  try { await upsert(conn, 'BARRIO', prepararFila(row, await metaCached(conn, cache, 'BARRIO')), ['IDBARRIO']); return true; }
+  catch (e) { bloqueos.push(`barrio ${idbarrio}: ${String(e.message).slice(0, 40)}`); return false; }
+}
+
+/**
+ * Cascada del legajo de un mesero: catálogos (profesion/ciudad/pais/barrio/estudio) →
+ * RH_PERSONA → RH_DPTO → RH_CARGO, en orden de FK. Devuelve { persona, cargo } presentes.
+ */
+async function garantizarLegajo(conn, cache, idpersona, idcargo, bloqueos) {
+  const res = { persona: false, cargo: false };
+  if (Number(idpersona) > 0) {
+    if ((await conn.query('SELECT 1 FROM rh_persona WHERE idpersona = ?', [idpersona])).length) {
+      res.persona = true;
+    } else {
+      const pcols = await nonBlobCols('server', 'RH_PERSONA');
+      const p = (await query('server', `SELECT FIRST 1 ${pcols.join(', ')} FROM rh_persona WHERE idpersona = ?`, [idpersona]))[0];
+      if (p) {
+        await garantizar(conn, cache, 'server', 'profesion',  'idprofesion', p.idprofesion, bloqueos);
+        await garantizar(conn, cache, 'server', 'pais',       'idpais',      p.idpais_nacimiento, bloqueos);
+        await garantizarCiudad(conn, cache, p.idciudad_nacimiento, bloqueos);
+        await garantizarCiudad(conn, cache, p.idciudad, bloqueos);
+        await garantizarBarrio(conn, cache, p.idbarrio, bloqueos);
+        await garantizar(conn, cache, 'server', 'rh_estudio', 'idestudio',   p.idestudio, bloqueos);
+        try {
+          const meta = await metaCached(conn, cache, 'RH_PERSONA');
+          await upsert(conn, 'RH_PERSONA', prepararFila(p, meta), ['IDPERSONA']);
+          res.persona = true;
+        } catch (e) { bloqueos.push(`rh_persona ${idpersona}: ${String(e.message).slice(0, 40)}`); }
+      }
+    }
+  }
+  if (Number(idcargo) > 0) {
+    if ((await conn.query('SELECT 1 FROM rh_cargo WHERE idcargo = ?', [idcargo])).length) {
+      res.cargo = true;
+    } else if (res.persona) { // rh_cargo referencia a rh_persona
+      const ccols = await nonBlobCols('server', 'RH_CARGO');
+      const c = (await query('server', `SELECT FIRST 1 ${ccols.join(', ')} FROM rh_cargo WHERE idcargo = ?`, [idcargo]))[0];
+      if (c) {
+        await garantizar(conn, cache, 'server', 'rh_dpto', 'iddpto', c.iddpto, bloqueos);
+        try {
+          const meta = await metaCached(conn, cache, 'RH_CARGO');
+          await upsert(conn, 'RH_CARGO', prepararFila(c, meta), ['IDCARGO']);
+          res.cargo = true;
+        } catch (e) { bloqueos.push(`rh_cargo ${idcargo}: ${String(e.message).slice(0, 40)}`); }
+      }
+    }
+  }
+  return res;
+}
+
 async function escribirServer(destino, data) {
   const conn = await attachExternal(optsDestino(destino, destino.server_bd));
   const iduser = data.usuario.iduser;
   const destinoId = destino.idsucursal;
   const bloqueos = [];
+  const metaCache = new Map();
   try {
     const cCpt = await metaDeConn(conn, 'USUARIO_CONCEPTO');
     const cMes = await metaDeConn(conn, 'GG_MESERO');
+    // Cascada profunda del legajo del mesero (autónoma, antes de la tx principal).
+    if (data.mesero && (Number(data.mesero.rh_idpersona) > 0 || Number(data.mesero.idcargo) > 0)) {
+      await garantizarLegajo(conn, metaCache, data.mesero.rh_idpersona, data.mesero.idcargo, bloqueos);
+    }
     const res = await conn.transaction(async (tx) => {
       const r = { sucursales: 0, depositos: 0, depositos1: 0, conceptos: 0, mesero: null };
 
