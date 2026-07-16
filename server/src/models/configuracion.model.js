@@ -147,10 +147,10 @@ const ConfiguracionModel = {
     try {
       const rows = await query(
         'server',
-        `SELECT FIRST 1 COALESCE(temporizador_replicacion, 15) AS min
+        `SELECT FIRST 1 COALESCE(temporizador_replicacion, 15) AS minutos
            FROM configuracion_usuario ORDER BY ip`,
       );
-      const n = Number(rows[0]?.min) || 15;
+      const n = Number(rows[0]?.minutos) || 15;
       return Math.min(1440, Math.max(1, n));
     } catch (_) { return 15; }
   },
