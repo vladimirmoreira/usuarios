@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Search, X, Printer } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, X, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 
 /* ── Modelo de contenido (render + búsqueda) ────────────────────────────── */
 export type Bloque =
@@ -78,12 +78,34 @@ export function SeccionesView({
   titulo: string; subtitulo: string; headerIcon: any; secciones: Seccion[]; footer?: string;
 }) {
   const [q, setQ] = useState('');
+  const [pagina, setPagina] = useState(0);
   const filtro = q.trim().toLowerCase();
   const visibles = useMemo(
     () => (filtro ? secciones.filter((s) => textoDe(s).includes(filtro)) : secciones),
     [filtro, secciones],
   );
-  const irA = (id: string) => document.getElementById(`sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Al filtrar, volver a la primera página; clamp por si se reduce el listado.
+  useEffect(() => { setPagina(0); }, [filtro]);
+  const total = visibles.length;
+  const actual = Math.min(pagina, Math.max(0, total - 1));
+
+  const ir = (n: number) => {
+    setPagina(Math.max(0, Math.min(n, total - 1)));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Flechas del teclado para pasar de página (sin interferir al escribir en el buscador).
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.key === 'ArrowRight') ir(actual + 1);
+      if (e.key === 'ArrowLeft') ir(actual - 1);
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [actual, total]);
+
   const imprimir = () => { setQ(''); setTimeout(() => window.print(), 150); };
   const fecha = new Date().toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -134,20 +156,26 @@ export function SeccionesView({
       <div className="flex gap-6">
         <nav className="no-print hidden w-56 shrink-0 lg:block">
           <div className="sticky top-4 space-y-1">
-            {visibles.map((s) => (
-              <button key={s.id} onClick={() => irA(s.id)}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+            {visibles.map((s, i) => (
+              <button key={s.id} onClick={() => ir(i)}
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm ${
+                  i === actual
+                    ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
+                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                }`}>
                 <s.icon className="h-4 w-4 shrink-0 text-brand-500" />
                 <span className="truncate">{s.titulo}</span>
               </button>
             ))}
-            {visibles.length === 0 && <p className="px-3 text-xs text-zinc-400">Sin resultados</p>}
+            {total === 0 && <p className="px-3 text-xs text-zinc-400">Sin resultados</p>}
           </div>
         </nav>
 
-        <div className="min-w-0 flex-1 space-y-6">
-          {visibles.map((s) => (
-            <section key={s.id} id={`sec-${s.id}`} className="doc-sec scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="min-w-0 flex-1">
+          {/* Lector: en pantalla se ve una sección por vez; al imprimir salen todas. */}
+          {visibles.map((s, i) => (
+            <section key={s.id} id={`sec-${s.id}`}
+              className={`doc-sec scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 ${i === actual ? '' : 'reader-hidden'}`}>
               <div className="mb-3 flex items-center gap-2">
                 <s.icon className="h-5 w-5 text-brand-600" />
                 <h3 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">{s.titulo}</h3>
@@ -155,12 +183,28 @@ export function SeccionesView({
               <Bloques bloques={s.bloques} />
             </section>
           ))}
-          {visibles.length === 0 && (
+
+          {total === 0 && (
             <div className="rounded-xl border border-dashed border-zinc-300 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700">
               No se encontró nada para “{q}”.
             </div>
           )}
-          {footer && <p className="pb-6 text-center text-xs text-zinc-400">{footer}</p>}
+
+          {/* Navegación de páginas (no se imprime) */}
+          {total > 0 && (
+            <div className="no-print mt-4 flex items-center justify-between border-t border-zinc-200 pt-3 dark:border-zinc-700">
+              <button disabled={actual <= 0} onClick={() => ir(actual - 1)}
+                className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 enabled:hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-300 dark:enabled:hover:bg-zinc-800">
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </button>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Página {actual + 1} de {total}</span>
+              <button disabled={actual >= total - 1} onClick={() => ir(actual + 1)}
+                className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 enabled:hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-300 dark:enabled:hover:bg-zinc-800">
+                Siguiente <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {footer && <p className="no-print pt-4 text-center text-xs text-zinc-400">{footer}</p>}
         </div>
       </div>
     </div>

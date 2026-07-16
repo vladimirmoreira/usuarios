@@ -49,6 +49,8 @@
 /* ── Impresión: ocultar sidebar/header y forzar fondo claro para fichas ── */
 /* Portada/índice del manual: ocultos en pantalla, visibles al imprimir */
 .print-only { display: none; }
+/* Lector paginado: la sección no-actual se oculta en pantalla pero se imprime */
+.reader-hidden { display: none; }
 
 @media print {
   @page {
@@ -64,6 +66,7 @@
   /* Documentación / Tutorial como material impreso */
   .no-print { display: none !important; }
   .print-only { display: block; }
+  .reader-hidden { display: block !important; }
   .doc-print { max-width: none !important; }
 
   /* Portada */
