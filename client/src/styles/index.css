@@ -54,4 +54,13 @@
   main { padding: 0 !important; background: white !important; }
   .print\:hidden { display: none !important; }
   .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+  /* Documentación / Tutorial impreso */
+  .no-print { display: none !important; }
+  .doc-print { max-width: none !important; }
+  .doc-sec {
+    break-inside: avoid; page-break-inside: avoid;
+    border: 1px solid #e2e8f0 !important; background: white !important;
+    margin-bottom: 10px;
+  }
+  .doc-sec * { color: #1e293b !important; }
 }

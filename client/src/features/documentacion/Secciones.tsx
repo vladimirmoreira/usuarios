@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Printer } from 'lucide-react';
 
 /* ── Modelo de contenido (render + búsqueda) ────────────────────────────── */
 export type Bloque =
@@ -84,20 +84,28 @@ export function SeccionesView({
     [filtro, secciones],
   );
   const irA = (id: string) => document.getElementById(`sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const imprimir = () => { setQ(''); setTimeout(() => window.print(), 150); };
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex items-center gap-2">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white">
-          <HeaderIcon className="h-5 w-5" />
+    <div className="doc-print mx-auto max-w-5xl">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white">
+            <HeaderIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{titulo}</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{subtitulo}</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{titulo}</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{subtitulo}</p>
-        </div>
+        <button onClick={imprimir}
+          className="no-print inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          title="Imprimir o guardar como PDF">
+          <Printer className="h-4 w-4" /> Imprimir / PDF
+        </button>
       </div>
 
-      <div className="relative mb-5 max-w-md">
+      <div className="no-print relative mb-5 max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         <input className="input pl-9 pr-9" placeholder="Buscar…" value={q} onChange={(e) => setQ(e.target.value)} />
         {q && (
@@ -108,7 +116,7 @@ export function SeccionesView({
       </div>
 
       <div className="flex gap-6">
-        <nav className="hidden w-56 shrink-0 lg:block">
+        <nav className="no-print hidden w-56 shrink-0 lg:block">
           <div className="sticky top-4 space-y-1">
             {visibles.map((s) => (
               <button key={s.id} onClick={() => irA(s.id)}
@@ -123,7 +131,7 @@ export function SeccionesView({
 
         <div className="min-w-0 flex-1 space-y-6">
           {visibles.map((s) => (
-            <section key={s.id} id={`sec-${s.id}`} className="scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+            <section key={s.id} id={`sec-${s.id}`} className="doc-sec scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
               <div className="mb-3 flex items-center gap-2">
                 <s.icon className="h-5 w-5 text-brand-600" />
                 <h3 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">{s.titulo}</h3>

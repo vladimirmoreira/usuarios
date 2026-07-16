@@ -38,6 +38,33 @@ const svgAltaSinRol = `<svg viewBox="0 0 640 400" xmlns="http://www.w3.org/2000/
   ${CO(20, 90, '1')} ${CO(612, 90, '2')} ${CO(216, 166, '3')}
 </svg>`;
 
+const svgAltaConRol = `<svg viewBox="0 0 640 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block" font-family="system-ui,Segoe UI,Arial">
+  <rect x="8" y="8" width="624" height="384" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <path d="M8 20 a12 12 0 0 1 12 -12 h600 a12 12 0 0 1 12 12 v28 h-624 z" fill="#f8fafc"/>
+  <line x1="8" y1="48" x2="632" y2="48" stroke="#e2e8f0"/>
+  <text x="28" y="34" font-size="15" font-weight="700" fill="#0f172a">Agregar Usuario</text>
+  <text x="608" y="36" font-size="18" fill="#94a3b8" text-anchor="end">&#215;</text>
+  ${F(28, 78, 178, 'Nombre *', 'Usuario')}
+  ${F(226, 78, 178, 'Apellido(s) *', 'ROLVENTAS')}
+  ${F(424, 78, 180, 'Usuario *', 'UROLVENTAS', '#eef2ff', '#4f46e5')}
+  ${F(28, 154, 178, 'Documento *', '90000002')}
+  ${SEL(226, 154, 178, 'Perfil *', 'Encargado de Ventas')}
+  ${F(424, 154, 180, 'Sucursal *', 'Casa Central', '#eef2ff', '#4f46e5')}
+  <text x="28" y="238" font-size="11.5" fill="#64748b">El perfil copia permisos, menú y conceptos. Si es PDV y Gastronomía está activa, crea el mesero.</text>
+  <line x1="8" y1="332" x2="632" y2="332" stroke="#e2e8f0"/>
+  <rect x="430" y="348" width="88" height="34" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="474" y="370" font-size="13" fill="#334155" text-anchor="middle">Cancelar</text>
+  <rect x="528" y="348" width="92" height="34" rx="8" fill="#4f46e5"/>
+  <text x="574" y="370" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">Guardar</text>
+  ${CO(216, 166, '1')} ${CO(612, 166, '2')}
+</svg>`;
+
+const op = (titulo: string, desc: string, hist: string): Seccion['bloques'] => ([
+  { t: 'sub', texto: titulo },
+  { t: 'p', texto: desc },
+  { t: 'p', texto: `Historial: ${hist}` },
+]);
+
 const proximamente = (extra?: string): Seccion['bloques'] => ([
   { t: 'p', texto: `En construcción.${extra ? ' ' + extra : ''} Se completará con pasos y mockups.` },
 ]);
@@ -76,7 +103,40 @@ const SECCIONES: Seccion[] = [
     ],
   },
   { id: 'roles', titulo: '2. Roles (crear, editar, permisos)', icon: UserCog, bloques: proximamente('Alta de rol, plantilla de permisos, edición y baja.') },
-  { id: 'usuario-con-rol', titulo: '3. Crear un usuario con Rol', icon: UserCheck, bloques: proximamente('Ejemplos UROLVENTAS (Encargado de Ventas) y UROLPRODUC (Producción). Incluye anexo con el catálogo de operaciones por evento.') },
+  {
+    id: 'usuario-con-rol', titulo: '3. Crear un usuario con Rol', icon: UserCheck,
+    bloques: [
+      { t: 'p', texto: 'A diferencia del "Sin Rol", acá el usuario copia la plantilla del perfil elegido: nace con permisos, menú y conceptos listos. La sucursal es obligatoria.' },
+      { t: 'pasos', items: [
+        'En Usuarios, presioná "Nuevo usuario".',
+        'Completá Nombre (Usuario) y Apellido(s) (ROLVENTAS). El Usuario se genera: UROLVENTAS.',
+        'Ingresá el Documento (90000002).',
+        'En Perfil elegí "Encargado de Ventas": se copian sus permisos.',
+        'Elegí la Sucursal (obligatoria) y presioná Guardar.',
+        'Si el perfil es de PDV y Gastronomía está activa, además se crea el mesero (gg_mesero) automáticamente.',
+      ] },
+      { t: 'img', svg: svgAltaConRol, caption: 'Alta con rol — 1) perfil que aporta los permisos, 2) sucursal obligatoria.' },
+      { t: 'p', texto: 'Otro ejemplo: UROLPRODUC (Usuario / Rolproduc) con perfil "Producción" — no es PDV, así que no genera mesero.' },
+    ],
+  },
+  {
+    id: 'anexo-operaciones', titulo: 'Anexo · Catálogo de operaciones', icon: ScrollText,
+    bloques: [
+      { t: 'p', texto: 'Cada acción sobre un usuario queda registrada en el historial (visible en Auditoría). Debajo, qué hace cada una y cómo se guarda.' },
+      ...op('Alta de usuario (op. 1)', 'Crea el usuario copiando la plantilla del rol (o vacío si es Sin Rol). Genera usuarioempresa, menú, sucursales y —si aplica— el mesero.', 'op 1 "Alta de Usuario" — ej. «Perfil=7 Suc=1 Doc=90000002».'),
+      ...op('Baja de usuario (op. 2)', 'Inhabilita al usuario (estado 0); no se borra. Si es mesero, también lo inactiva; si Biométrico está activo, elimina su huella.', 'op 2 "Baja de Usuario" — ej. «Inactivación de usuario exitoso».'),
+      ...op('Re-activar cuenta (op. 11)', 'Vuelve a habilitar (estado 1) un usuario que estaba de baja.', 'op 11 "Re-Activar Cuenta".'),
+      ...op('Reinicio de clave (op. 3)', 'Reinicia la contraseña. Si es mesero, también actualiza su código de acceso PDV.', 'op 3 "Reinicio de Clave".'),
+      ...op('Reasignación de sucursal (op. 5)', 'Cambia la sucursal predeterminada (orden 1) y reordena las demás; ajusta también los depósitos.', 'op 5 "Reasignación de Sucursal" — ej. «Codigo:1».'),
+      ...op('Cambio de perfil (op. 6)', 'Cambia el rol del usuario y, si es mesero, su tipo de mesero.', 'op 6 "Cambio de Perfil".'),
+      ...op('Actualización de cuenta (op. 7)', 'Corrige nombre, apellido, documento o foto. También cubre cambios de accesos (permisos, menú, PDV, conceptos, sucursales, depósitos, master) y la clonación a otra empresa.', 'op 7 "Actualización de Cuenta" — ej. «Accesos: menú (19 items)».'),
+      ...op('Vinculación con legajo (op. 8)', 'Asocia el usuario a una persona de RRHH por documento.', 'op 8 "Vinculación con Legajo".'),
+      ...op('Eliminación de huella (op. 4)', 'Borra la huella biométrica asociada al legajo del usuario.', 'op 4 "Eliminación de Huella" — ej. «cargoID:123».'),
+      ...op('Exclusión de cuenta (op. 9)', 'Marca permisos excluidos puntualmente sin cambiar el rol.', 'op 9 "Exclusion de Cuenta".'),
+      ...op('Migración / Replicación (op. 10)', 'Encola/replica el usuario a las sucursales, propaga un rol o reintenta envíos.', 'op 10 "Migración de Datos" — ej. «Propagación rol 7: 62 usuario(s)».'),
+      { t: 'p', texto: 'Nota: el ingreso al sistema (login) también se registra (actualmente bajo la op. 12 "Actualización de Menús"), con la empresa e IP.' },
+    ],
+  },
   { id: 'importacion', titulo: '4. Importación masiva de usuarios', icon: Upload, bloques: proximamente('Carga desde archivo, validaciones y archivo de errores.') },
   { id: 'auditoria', titulo: '5. Auditoría', icon: ScrollText, bloques: proximamente('Historial de acciones: quién, qué y cuándo.') },
   { id: 'reportes', titulo: '6. Reportes', icon: BarChart2, bloques: proximamente('Listados, filtros y exportación.') },
