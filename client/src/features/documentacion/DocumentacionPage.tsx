@@ -1,17 +1,8 @@
-import { useMemo, useState } from 'react';
 import {
-  BookOpen, Search, Database, Clock, Radio, GitBranch, Users, ListChecks, Layers, X,
-  Sliders, Wrench, Lock,
+  BookOpen, Database, Clock, Radio, GitBranch, Users, ListChecks, Layers,
+  Sliders, Wrench, Lock, Boxes, Network,
 } from 'lucide-react';
-
-/* ── Modelo de contenido (permite render + búsqueda) ───────────────────── */
-type Bloque =
-  | { t: 'p'; texto: string }
-  | { t: 'sub'; texto: string }
-  | { t: 'ul'; items: string[] }
-  | { t: 'tabla'; head: string[]; filas: string[][] };
-
-type Seccion = { id: string; titulo: string; icon: any; bloques: Bloque[] };
+import { SeccionesView, type Seccion } from './Secciones';
 
 const SECCIONES: Seccion[] = [
   {
@@ -63,6 +54,23 @@ const SECCIONES: Seccion[] = [
     ],
   },
   {
+    id: 'catalogos', titulo: 'Catálogos y tablas de referencia', icon: Boxes,
+    bloques: [
+      { t: 'p', texto: 'Los catálogos definen QUÉ permisos, menús y operaciones existen. Son dato de instalación: se siembran una vez por base y NO viajan con la replicación de usuarios (cada base tiene los suyos).' },
+      { t: 'tabla', head: ['Tabla', 'BD', 'Función', 'Se puebla desde'], filas: [
+        ['TMP$USUARIO_PERMISOS_GENERALES', 'system', 'Lista de permisos del ERP (Gestión Empresarial) — 39 ítems.', 'Metadatos (botón Ejecutar)'],
+        ['TMP$USUARIO_PERMISOS_PDV', 'system', 'Permisos del módulo PDV / Punto de Venta — 18 ítems.', 'Metadatos (botón Ejecutar)'],
+        ['TMP$USUARIO_PERMISOS_CONCEPTOS', 'system', 'Permisos de acción por concepto de movimiento — 15 ítems.', 'Metadatos (botón Ejecutar)'],
+        ['TIPO_USUARIO', 'system', 'Roles / perfiles base (Administración, Ventas, Caja, etc.).', 'Metadatos (botón Ejecutar)'],
+        ['TIPO_OPERACION', 'server', 'Catálogo de operaciones para la auditoría (alta, baja, reset, migración…).', 'Metadatos (botón Ejecutar)'],
+        ['TMP$USUARIO_PERMISOS_MASTER', 'master', 'Permisos del módulo master (Contabilidad / RRHH) — 9 ítems.', 'migrarDDL (esquema)'],
+        ['TMP$USUARIO_MENU_MASTER', 'master', 'Ítems de menú de Contabilidad y RRHH — 19 ítems.', 'migrarDDL (esquema)'],
+      ] },
+      { t: 'sub', texto: 'Nota sobre las TMP$ del ERP legacy' },
+      { t: 'p', texto: 'La BD server tiene muchas otras tablas TMP$ (TMP$USUARIO_SUCURSAL, TMP$USUARIO_DEPOSITO, TMP$USUARIO_DEPOSITO1, etc.) que son temporales de trabajo del sistema legacy Delphi (las usaba el SP PCD_OPERACIONES). El módulo Node NO las usa ni las siembra: no forman parte de esta aplicación.' },
+    ],
+  },
+  {
     id: 'replicacion', titulo: 'Módulo de Replicación', icon: Radio,
     bloques: [
       { t: 'p', texto: 'Replica los usuarios de la base central a las bases de cada sucursal destino. Reemplaza el mecanismo legacy de "Migración de Datos" (operación 10) por un motor en Node con cola resiliente.' },
@@ -101,6 +109,26 @@ const SECCIONES: Seccion[] = [
       { t: 'p', texto: 'Es best-effort por dependencia: si una no se puede resolver, se marca Bloqueado y no se aborta el resto. Los datos base con id 0 (centinela) y las empresas se consideran dato de instalación de la sucursal; no se replican por usuario.' },
       { t: 'sub', texto: 'Datos opcionales del mesero' },
       { t: 'p', texto: 'La persona (rh_idpersona) y el cargo del mesero pueden venir vacíos según el flag LEGAJO de configuracion_usuario. En ese caso el mesero se replica igual, sin esos vínculos. En USUARIO_CONCEPTO la única FK dura es el tipo de movimiento; las demás columnas no tienen constraint y se copian tal cual. En USUARIOEMPRESA se omite la fila si su empresa no existe en la sucursal.' },
+    ],
+  },
+  {
+    id: 'distribuida', titulo: 'BD distribuida: identidad y colisiones', icon: Network,
+    bloques: [
+      { t: 'p', texto: 'Al replicar entre bases, el riesgo clásico es que un ID generado en una base pise datos de otro registro en la base destino. El módulo lo evita con dos estrategias según el tipo de dato.' },
+      { t: 'tabla', head: ['Estrategia', 'Tablas', 'Cómo evita la colisión'], filas: [
+        ['Regenerar PK local + clave natural', 'menu_general (por iduser); usuario_sucursal / deposito / deposito1 / concepto (sin PK)', 'Se borra por iduser y se re-inserta; el ID surrogate lo asigna el generador del propio destino. Nunca se pisa el ID de otro usuario.'],
+        ['Preservar PK (identidad global)', 'usuario, usuarioempresa, gg_mesero, rh_persona, rh_cargo, tipo_usuario', 'El ID lo asigna SIEMPRE la central; la sucursal solo lo recibe. Mismo ID = misma entidad, así el upsert es seguro.'],
+      ] },
+      { t: 'sub', texto: 'Regla de oro' },
+      { t: 'p', texto: 'La central es el único lugar donde se CREAN las entidades con identidad global (usuario, mesero, persona, cargo, rol). Las sucursales solo reciben. Por eso "mismo idmesero = mismo mesero" en todas las bases y el upsert nunca reemplaza otra entidad.' },
+      { t: 'sub', texto: 'menu_general en detalle' },
+      { t: 'p', texto: 'menu_general NO se replica por su PK: en el destino se BORRA por iduser y se RE-INSERTA generando un idmenu_principal nuevo con el generador local. Por eso el cambio de un usuario nunca puede reemplazar el menú de otro, aunque el número de ID coincida entre bases.' },
+      { t: 'sub', texto: 'Si en el futuro una sucursal necesitara crear localmente' },
+      { t: 'ul', items: [
+        'Rangos / offset por nodo: cada sucursal usa un bloque de IDs disjunto (ya se aplica en el offset de GG_MESERO.IDSUCURSAL).',
+        'Claves compuestas o naturales donde se pueda (por ejemplo iduser + idempresa).',
+        'Asignación central: la sucursal pide un bloque de IDs a la central antes de crear.',
+      ] },
     ],
   },
   {
@@ -200,128 +228,14 @@ const SECCIONES: Seccion[] = [
   },
 ];
 
-/* ── Render de bloques ──────────────────────────────────────────────────── */
-function textoDe(s: Seccion): string {
-  return (s.titulo + ' ' + s.bloques.map((b) =>
-    b.t === 'p' || b.t === 'sub' ? b.texto
-      : b.t === 'ul' ? b.items.join(' ')
-      : [...b.head, ...b.filas.flat()].join(' ')).join(' ')).toLowerCase();
-}
-
-function Bloques({ bloques }: { bloques: Bloque[] }) {
-  return (
-    <div className="space-y-3">
-      {bloques.map((b, i) => {
-        if (b.t === 'p') return <p key={i} className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{b.texto}</p>;
-        if (b.t === 'sub') return <h4 key={i} className="pt-1 text-sm font-semibold text-zinc-800 dark:text-zinc-100">{b.texto}</h4>;
-        if (b.t === 'ul') return (
-          <ul key={i} className="list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-300">
-            {b.items.map((it, j) => <li key={j}>{it}</li>)}
-          </ul>
-        );
-        return (
-          <div key={i} className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                  {b.head.map((h, j) => <th key={j} className="px-3 py-1.5 text-left font-semibold text-zinc-500 dark:text-zinc-400">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {b.filas.map((f, j) => (
-                  <tr key={j} className="border-b border-zinc-100 dark:border-zinc-800">
-                    {f.map((c, k) => <td key={k} className="px-3 py-1.5 align-top text-zinc-600 dark:text-zinc-300">{c}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function DocumentacionPage() {
-  const [q, setQ] = useState('');
-  const filtro = q.trim().toLowerCase();
-
-  const visibles = useMemo(
-    () => (filtro ? SECCIONES.filter((s) => textoDe(s).includes(filtro)) : SECCIONES),
-    [filtro],
-  );
-
-  const irA = (id: string) => document.getElementById(`doc-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
   return (
-    <div className="mx-auto max-w-5xl">
-      {/* Encabezado */}
-      <div className="mb-4 flex items-center gap-2">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white">
-          <BookOpen className="h-5 w-5" />
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Documentación</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Ficha técnica del módulo — referencia para el supervisor</p>
-        </div>
-      </div>
-
-      {/* Buscador */}
-      <div className="relative mb-5 max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-        <input
-          className="input pl-9 pr-9"
-          placeholder="Buscar en la documentación…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        {q && (
-          <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      <div className="flex gap-6">
-        {/* Índice (TOC) */}
-        <nav className="hidden w-56 shrink-0 lg:block">
-          <div className="sticky top-4 space-y-1">
-            {visibles.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => irA(s.id)}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                <s.icon className="h-4 w-4 shrink-0 text-brand-500" />
-                <span className="truncate">{s.titulo}</span>
-              </button>
-            ))}
-            {visibles.length === 0 && <p className="px-3 text-xs text-zinc-400">Sin resultados</p>}
-          </div>
-        </nav>
-
-        {/* Contenido */}
-        <div className="min-w-0 flex-1 space-y-6">
-          {visibles.map((s) => (
-            <section key={s.id} id={`doc-${s.id}`} className="scroll-mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
-              <div className="mb-3 flex items-center gap-2">
-                <s.icon className="h-5 w-5 text-brand-600" />
-                <h3 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">{s.titulo}</h3>
-              </div>
-              <Bloques bloques={s.bloques} />
-            </section>
-          ))}
-          {visibles.length === 0 && (
-            <div className="rounded-xl border border-dashed border-zinc-300 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700">
-              No se encontró nada para “{q}”.
-            </div>
-          )}
-
-          <p className="pb-6 text-center text-xs text-zinc-400">
-            Manual de usuario — próximamente.
-          </p>
-        </div>
-      </div>
-    </div>
+    <SeccionesView
+      titulo="Documentación"
+      subtitulo="Ficha técnica del módulo — referencia para el supervisor"
+      headerIcon={BookOpen}
+      secciones={SECCIONES}
+      footer="Manual de usuario: ver el menú Tutorial."
+    />
   );
 }
