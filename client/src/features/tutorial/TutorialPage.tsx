@@ -65,10 +65,6 @@ const op = (titulo: string, desc: string, hist: string): Seccion['bloques'] => (
   { t: 'p', texto: `Historial: ${hist}` },
 ]);
 
-const proximamente = (extra?: string): Seccion['bloques'] => ([
-  { t: 'p', texto: `En construcción.${extra ? ' ' + extra : ''} Se completará con pasos y mockups.` },
-]);
-
 const SECCIONES: Seccion[] = [
   {
     id: 'ingresar', titulo: 'Ingresar al sistema', icon: LogIn,
@@ -168,12 +164,90 @@ const SECCIONES: Seccion[] = [
       { t: 'p', texto: 'Nota: el ingreso al sistema también se registra — op. 12 "Inicio de Sesión" (y op. 13 "Intento de Login Fallido" cuando la credencial es inválida), con la empresa e IP.' },
     ],
   },
-  { id: 'importacion', titulo: '4. Importación masiva de usuarios', icon: Upload, bloques: proximamente('Carga desde archivo, validaciones y archivo de errores.') },
-  { id: 'auditoria', titulo: '5. Auditoría', icon: ScrollText, bloques: proximamente('Historial de acciones: quién, qué y cuándo.') },
-  { id: 'reportes', titulo: '6. Reportes', icon: BarChart2, bloques: proximamente('Listados, filtros y exportación.') },
-  { id: 'clonacion', titulo: '7. Clonación a otra empresa', icon: Copy, bloques: proximamente('Copiar accesos de un usuario a otra empresa.') },
-  { id: 'admin-config', titulo: 'Admin · Configuración', icon: Settings, bloques: proximamente('Flags, temporizadores y metadatos.') },
-  { id: 'admin-replicacion', titulo: 'Admin · Replicación', icon: Radio, bloques: proximamente('Destinos, cola, propagación de rol y alertas.') },
+  {
+    id: 'importacion', titulo: '4. Importación masiva de usuarios', icon: Upload,
+    bloques: [
+      { t: 'p', texto: 'Podés dar de alta muchos usuarios de una vez desde un archivo CSV o pegando desde Excel.' },
+      { t: 'sub', texto: 'Formato (columnas)' },
+      { t: 'tabla', head: ['Columna', 'Contenido'], filas: [
+        ['nombre', 'Nombre del usuario.'],
+        ['apellido', 'Apellido(s).'],
+        ['documento', 'Número de documento (único).'],
+        ['perfil', 'Rol: su id (7) o la descripción exacta ("Encargado de Ventas"). Debe estar activo y con permisos.'],
+        ['idsucursal', 'Id de la sucursal (activa).'],
+      ] },
+      { t: 'pasos', items: [
+        'En Usuarios, presioná "Importar".',
+        'Pegá o subí los datos con esas columnas. Sin encabezado, el orden es: nombre, apellido, documento, perfil, idsucursal.',
+        'Revisá la previsualización: se marcan las filas con error.',
+        'Confirmá para dar de alta las filas válidas.',
+        'Si hubo errores, se genera en tu Escritorio el archivo "errImportacionUsuario_DDMMAAAA.txt" con el detalle fila por fila.',
+      ] },
+      { t: 'p', texto: 'El identificador (iduser) se genera automáticamente para cada usuario.' },
+    ],
+  },
+  {
+    id: 'auditoria', titulo: '5. Auditoría', icon: ScrollText,
+    bloques: [
+      { t: 'p', texto: 'Registra todas las acciones del módulo: quién, qué operación, cuándo, la autorización y una observación.' },
+      { t: 'pasos', items: [
+        'Entrá al menú Auditoría.',
+        'Filtrá por Usuario, Operación, Autorización o rango de Fechas.',
+        'La grilla muestra: ID, Fecha, Usuario, Operación, Autorización y Observación.',
+        'Podés exportar el resultado.',
+      ] },
+      { t: 'p', texto: 'El detalle de cada tipo de operación está en el Anexo · Catálogo de operaciones.' },
+    ],
+  },
+  {
+    id: 'reportes', titulo: '6. Reportes', icon: BarChart2,
+    bloques: [
+      { t: 'p', texto: 'Genera una ficha imprimible de un Usuario o de un Rol.' },
+      { t: 'pasos', items: [
+        'Entrá al menú Reportes y elegí el tipo: Usuario o Rol.',
+        'Buscá y seleccioná el registro.',
+        'Se muestra la ficha con sus datos (perfil, sucursales y permisos; o la plantilla del rol).',
+        'Usá "Imprimir / Exportar a PDF" para guardarla o imprimirla.',
+      ] },
+    ],
+  },
+  {
+    id: 'clonacion', titulo: '7. Clonación a otra empresa', icon: Copy,
+    bloques: [
+      { t: 'p', texto: 'Copia los accesos de un usuario (permisos y menú) a otra empresa dentro de la misma base. Útil cuando el mismo usuario debe operar en varias empresas.' },
+      { t: 'pasos', items: [
+        'Abrí el editor del usuario (botón Modificar).',
+        'En "Clonar accesos a empresa", elegí la empresa destino.',
+        'Presioná "Clonar".',
+      ] },
+      { t: 'p', texto: 'No copia sucursal ni depósitos (son globales del usuario). No sobrescribe si el usuario ya tiene accesos en esa empresa. El botón aparece solo si el flag CLONAR está activo. (Distinto de Replicar, que envía el usuario completo a otras sucursales.)' },
+    ],
+  },
+  {
+    id: 'admin-config', titulo: 'Admin · Configuración', icon: Settings,
+    bloques: [
+      { t: 'p', texto: 'Solo para Admin o el usuario autorizado. Ajusta el comportamiento del módulo por instalación (pestañas):' },
+      { t: 'ul', items: [
+        'Configuración: interruptores y parámetros (Legajo, Gastronomía, Clonar, Replicar, temporizador y retención de replicación, etc.).',
+        'Empresas: qué empresas son accesibles en el login y el mapeo con la BD master.',
+        'Metadatos: inicialización de catálogos, una sola vez por instalación.',
+      ] },
+      { t: 'p', texto: 'El detalle de cada parámetro está en Documentación → Parámetros de configuración.' },
+    ],
+  },
+  {
+    id: 'admin-replicacion', titulo: 'Admin · Replicación', icon: Radio,
+    bloques: [
+      { t: 'p', texto: 'Solo Admin/autorizado y con el flag REPLICAR activo. Muestra el estado del envío de usuarios a las sucursales.' },
+      { t: 'ul', items: [
+        'Grilla por destino con el conteo por estado: Encolado, Procesando, Enviado, Error, Bloqueado.',
+        'Botón Reintentar para reencolar los envíos fallidos.',
+        'Sección "Roles pendientes de propagar": botón Replicar con barra de progreso.',
+        'Un badge rojo en el menú avisa si hay pendientes o errores, aunque estés en otra pantalla.',
+      ] },
+      { t: 'p', texto: 'El funcionamiento completo (destinos, cola, cascada de dependencias) está en Documentación → Módulo de Replicación.' },
+    ],
+  },
 ];
 
 export default function TutorialPage() {
