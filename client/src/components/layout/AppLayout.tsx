@@ -31,7 +31,7 @@ export default function AppLayout() {
     queryKey: ['replicacion', 'alertas'],
     queryFn: ReplicacionAPI.alertas,
     enabled: puedeVerReplicacion,
-    refetchInterval: 30_000,
+    refetchInterval: 120_000, // no es crítico; alcanza con refrescar cada 2 min
   });
   const alertas = alertasQ.data?.total ?? 0;
 
