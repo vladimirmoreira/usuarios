@@ -101,7 +101,10 @@ export default function ReplicacionPage() {
               <tr>
                 <th className="px-4 py-2 text-left">Destino</th>
                 <th className="px-3 py-2 text-center">Estados de la cola</th>
-                <th className="px-3 py-2 text-center">Master</th>
+                <th className="px-3 py-2 text-center"
+                    title="¿Este destino tiene BD master configurada? ✓ = también se le replica RRHH/Contabilidad. — = solo system + server. No es un estado de éxito.">
+                  Repl. Master
+                </th>
                 <th className="px-3 py-2 text-right">Acción</th>
               </tr>
             </thead>
@@ -136,8 +139,8 @@ export default function ReplicacionPage() {
                     </td>
                     <td className="px-3 py-2 text-center text-xs">
                       {d.replica_master
-                        ? <span className="text-emerald-600">✓</span>
-                        : <span className="text-zinc-300">—</span>}
+                        ? <span className="text-emerald-600" title="Tiene BD master → replica RRHH/Contabilidad">✓</span>
+                        : <span className="text-zinc-300" title="Sin BD master (solo system + server)">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {conError && (

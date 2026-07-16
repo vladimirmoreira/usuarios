@@ -208,8 +208,19 @@ async function escribirSystem(destino, data) {
     // Introspección del destino ANTES de la transacción (esquemas pueden diferir).
     const cU = await metaDeConn(conn, 'USUARIO');
     const cUE = await metaDeConn(conn, 'USUARIOEMPRESA');
+    const cTU = await metaDeConn(conn, 'TIPO_USUARIO');
+    // Rol como dependencia previa garantizada: si el usuario tiene idtipo_usuario,
+    // se lee su fila de TIPO_USUARIO en central para asegurarla en el destino (FK de
+    // usuario.idtipo_usuario). idtipo_usuario <= 0 = "Sin Rol" → no hay dependencia.
+    const idtipo = Number(data.usuario.idtipo_usuario);
+    const rolRow = idtipo > 0
+      ? await leerFila('system', 'TIPO_USUARIO', 'idtipo_usuario', idtipo)
+      : null;
+
     return await conn.transaction(async (tx) => {
-      const r = { usuario: null, usuarioempresa: 0, menu: 0 };
+      const r = { rol: null, usuario: null, usuarioempresa: 0, menu: 0 };
+      // 1) Garantizar el rol antes del usuario (upsert = crea si falta, sincroniza si existe).
+      if (rolRow) r.rol = await upsert(tx, 'TIPO_USUARIO', prepararFila(rolRow, cTU), ['IDTIPO_USUARIO']);
       r.usuario = await upsert(tx, 'USUARIO', prepararFila(data.usuario, cU), ['IDUSER']);
 
       for (const ue of data.usuarioempresa) {
