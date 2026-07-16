@@ -46,9 +46,12 @@ El módulo administra el ciclo de vida completo de los **usuarios** y sus **acce
 | 28 | **Job cron — Inactividad** | ✅ | Escaneo automático de inactividad (lunes 06:00). Solo registra candidatos en log; no inhabilita automáticamente. Controlado por `ENABLE_INACTIVIDAD_JOB=1`. |
 | 29 | **Job cron — Calendario de sucursal** | ✅ | Aplica diariamente (04:00 AM por defecto) las asignaciones programadas en `USUARIO_TURNO_SUCURSAL`. Verifica estado activo del usuario **en tiempo de ejecución** (BD system) — usuarios dados de baja a mitad de mes son omitidos aunque tengan días en el calendario. Llama `OperacionesService.reasignarSucursal()` (incluye GG_MESERO + auditoría OP.5). Configurable con `ENABLE_TURNO_SUCURSAL_JOB=1` / `TURNO_SUCURSAL_CRON`. |
 | 30 | **Importación masiva** | ✅ | CSV/TSV/TXT (separador auto: TAB/`;`/`,`), cabecera opcional, hasta 200 filas. Pre-validación cliente (duplicados de documento, campos vacíos). Validación server (perfil habilitado+plantilla, documento único, sucursal activa). Alta atómica — un solo `TRANSACTION` system: si falla cualquier fila, ROLLBACK de todo el lote. Errores detallan tabla exacta (`[USUARIO]`, `[MENU_GENERAL]`, etc.). TXT de errores en Escritorio. Post-effects (legajo, gastronomía, masterSync, auditoría) fuera de la tx en best-effort. |
-| 31 | **Legajos** | 🟡 pendiente | Datos de RRHH del usuario (vinculación con `LEGAJO`). |
-| 32 | **Biometría** | 🟡 pendiente | Captura/enrollment huella + sincronización dispositivos. |
-| 33 | **Tests E2E** | 🟡 pendiente | Playwright cubriendo flujos críticos. |
+| 31 | **Replicación a sucursales** | ✅ | Motor outbox (`CONFIGURACION_USUARIO_REPLICA` + `REPLICACION_COLA`) que replica el usuario completo a las BD de cada sucursal (system/server/master). Cascada de dependencias **constraint-driven**, transformaciones (ORDEN, offset `GG_MESERO.IDSUCURSAL`), dedupe, worker con reintentos y purga, propagación de rol con progreso, badge de alertas. Ver `MetadataProyecto.md`. |
+| 32 | **Franja horaria de ingreso** | ✅ | `CONFIGURACION_USUARIO.HORA_INICIO/HORA_FIN` (`HH:MM`): restringe login y sesiones abiertas a ese rango (middleware por request cacheado 60s). `NULL` = sin límite; no aplica a Admin; soporta franjas nocturnas. |
+| 33 | **Documentación + Tutorial** | ✅ | Menús con ficha técnica (Admin) y manual de usuario (todos): buscador, índice, lector paginado, mockups SVG y export a PDF. |
+| 34 | **Legajos** | 🟡 pendiente | Datos de RRHH del usuario (vinculación con `LEGAJO`). |
+| 35 | **Biometría** | 🟡 pendiente | Captura/enrollment huella + sincronización dispositivos. |
+| 36 | **Tests E2E** | 🟡 pendiente | Playwright cubriendo flujos críticos. |
 
 ### 1.2 Mejoras frente al sistema original
 

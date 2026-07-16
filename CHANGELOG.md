@@ -7,6 +7,28 @@ y las fechas están en formato `AAAA-MM-DD` (zona `America/Asuncion`).
 
 ---
 
+## [No publicado] — 2026-07-16
+
+### Agregado — Franja horaria de ingreso
+
+- `CONFIGURACION_USUARIO.HORA_INICIO` / `HORA_FIN` (`"HH:MM"`): restringen el acceso al módulo a
+  ese rango horario. Se valida **en el login** y **en cada request** (middleware `franjaHoraria`
+  con caché de 60s), por lo que también **corta las sesiones abiertas** al salir de la franja.
+  `NULL` = sin restricción; **no aplica al usuario Admin** (evita autobloqueo); soporta franjas
+  que cruzan medianoche. El front vuelve al login con aviso (`code: FUERA_HORARIO`). Zona horaria
+  `TZ` (default `America/Asuncion`). Editable desde Configuración.
+
+### Agregado — Documentación y Tutorial (menús nuevos)
+
+- **Documentación** (ficha técnica, solo ADMIN/`AUTORIZADO`) y **Tutorial** (manual, todos):
+  buscador, índice lateral, **lector paginado** (una sección por página) y **exportación a PDF**
+  como material impreso (portada + índice + secciones, márgenes A4). Imágenes = **mockups SVG**
+  vectoriales por sección.
+- Re-etiquetado de operaciones de login: `TIPO_OPERACION` 12 = "Inicio de Sesión", 13 = "Intento de
+  Login Fallido". Columna **"Acciones"** con tooltips en las grillas de Usuarios y Roles.
+
+---
+
 ## [No publicado] — 2026-07-15
 
 ### Agregado — Módulo de Replicación de usuarios a sucursales

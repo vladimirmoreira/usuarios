@@ -48,6 +48,7 @@ const SECCIONES: Seccion[] = [
         ['TEMPORIZADOR_REPLICACION', 'Minutos entre ciclos del worker de replicación (default 15).'],
         ['RETENCION_REPLICACION_HORAS', 'Horas que se conservan los envíos exitosos antes de purgarlos de la lista (default 48).'],
         ['DIAS_INACTIVIDAD', 'Umbral (en días) para considerar a un usuario inactivo (default 90).'],
+        ['HORA_INICIO / HORA_FIN', 'Franja horaria de ingreso (HH:MM). Fuera del rango se bloquea el login y se corta la sesión abierta. Vacío = sin límite; no aplica a Admin. Soporta franjas nocturnas.'],
         ['AUTORIZADO', 'Usuario (además de ADMIN) habilitado a ver/editar Configuración, Replicación y Documentación.'],
         ['METADATA_EJECUTADO', 'Cerrojo: 1 = la inicialización de metadatos ya se ejecutó.'],
       ] },
@@ -182,6 +183,8 @@ const SECCIONES: Seccion[] = [
     bloques: [
       { t: 'ul', items: [
         'Autenticación por token JWT con refresh; las rutas de administración exigen ser ADMIN o AUTORIZADO.',
+        'Franja horaria de ingreso: si se configura hora_inicio/hora_fin, el login y las sesiones abiertas se limitan a ese rango (chequeo por request cacheado). No aplica a Admin.',
+        'Las contraseñas admiten hash bcrypt con lectura dual del texto plano legacy (migración gradual).',
         'Login multi-empresa: valida usuario global y calcula las empresas accesibles; con más de una, se elige en un combo.',
         'Las contraseñas se guardan en texto plano por restricción del sistema legacy (Delphi). No modificar sin coordinar con Sistemas.',
         'La CLAVE de configuración y la CLAVE_BD de los destinos nunca se exponen por la API.',

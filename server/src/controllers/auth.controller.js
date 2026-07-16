@@ -5,19 +5,9 @@ const UsuarioModel = require('../models/usuario.model');
 const ConfiguracionModel = require('../models/configuracion.model');
 const { signAccess, signRefresh, verifyRefresh } = require('../utils/jwt');
 const { auditarDirecto, OP } = require('../utils/audit');
+const { horaActual, dentroFranja } = require('../utils/franja');
 
 const ipDeReq = (req) => req.headers['x-client-ip'] || req.ip || '';
-
-const TZ = process.env.TZ || 'America/Asuncion';
-/** Hora actual "HH:MM" en la zona horaria configurada. */
-function horaActual() {
-  return new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour12: false }).slice(0, 5);
-}
-/** ¿`now` (HH:MM) cae dentro de [ini, fin]? Soporta franjas que cruzan medianoche. */
-function dentroFranja(now, ini, fin) {
-  if (!ini || !fin) return true;
-  return ini <= fin ? (now >= ini && now <= fin) : (now >= ini || now <= fin);
-}
 
 const AuthController = {
   /**

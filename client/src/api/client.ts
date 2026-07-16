@@ -13,10 +13,11 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/** Redirige al login limpiando la sesión. */
-function forzarLogin() {
+/** Redirige al login limpiando la sesión (con mensaje opcional para mostrar). */
+function forzarLogin(mensaje?: string) {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
+  if (mensaje) sessionStorage.setItem('authMsg', mensaje);
   if (location.pathname !== '/login') location.href = '/login';
 }
 
@@ -65,6 +66,10 @@ api.interceptors.response.use(
     }
 
     if (status === 401) forzarLogin();
+    // Fuera de la franja horaria: la sesión se corta y se vuelve al login con aviso.
+    if (status === 403 && (err.response?.data as any)?.code === 'FUERA_HORARIO') {
+      forzarLogin((err.response?.data as any)?.error || 'Fuera del horario permitido.');
+    }
     return Promise.reject(err);
   },
 );

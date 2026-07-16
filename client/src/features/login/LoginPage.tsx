@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader2, Building2, ArrowLeft } from 'lucide-react';
 import toast from '../../lib/notify';
@@ -15,6 +15,12 @@ export default function LoginPage() {
   // Fase 2 (multi-empresa): si el usuario tiene >1 empresa accesible, se muestra el combo.
   const [empresas, setEmpresas] = useState<EmpresaOpcion[] | null>(null);
   const [idempresa, setIdempresa] = useState('');
+
+  // Aviso cuando la sesión se cortó (p. ej. fuera de la franja horaria).
+  useEffect(() => {
+    const m = sessionStorage.getItem('authMsg');
+    if (m) { toast.error(m); sessionStorage.removeItem('authMsg'); }
+  }, []);
 
   const doLogin = async (emp?: string) => {
     setLoading(true);

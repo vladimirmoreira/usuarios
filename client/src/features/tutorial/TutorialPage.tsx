@@ -241,6 +241,7 @@ const SECCIONES: Seccion[] = [
       { t: 'p', texto: 'Solo para Admin o el usuario autorizado. Ajusta el comportamiento del módulo por instalación (pestañas):' },
       { t: 'ul', items: [
         'Configuración: interruptores y parámetros (Legajo, Gastronomía, Clonar, Replicar, temporizador y retención de replicación, etc.).',
+        'Franja horaria de ingreso: poné hora_inicio y hora_fin (ej. 06:00 a 20:00) para permitir el acceso solo en ese rango. Vacío = sin límite; no aplica a Admin.',
         'Empresas: qué empresas son accesibles en el login y el mapeo con la BD master.',
         'Metadatos: inicialización de catálogos, una sola vez por instalación.',
       ] },
