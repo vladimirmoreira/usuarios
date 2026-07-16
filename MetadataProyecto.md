@@ -317,6 +317,9 @@ CREATE TABLE REPLICACION_COLA (
   referencia). Lo omitido/anulado se reporta como `BLOQUEADO`.
 - **MASTER_BD:** `escribirMaster()` replica `USUARIO`+`USUARIOEMPRESA` de RRHH/Contab (solo si el
   usuario existe en la master central; copia master→master verbatim, sin traducir idempresa).
+- **Rol como dependencia previa:** `escribirSystem` hace upsert de `TIPO_USUARIO` (el `idtipo_usuario`
+  del usuario) **antes** de escribir `USUARIO`, garantizando la FK y sincronizando el rol en el
+  destino. `idtipo_usuario <= 0` = "Sin Rol" → sin dependencia.
 - **Dedupe:** `encolar` no crea un job si ya hay uno PENDIENTE para ese (usuario, destino) — el worker
   lee en vivo, un pendiente basta.
 - **Retención:** el worker purga los ENVIADO cuya `fecha_proc` supera
