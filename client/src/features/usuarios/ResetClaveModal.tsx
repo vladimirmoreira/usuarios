@@ -57,7 +57,7 @@ export default function ResetClaveModal({ iduser, onClose }: { iduser: string; o
                   <button type="button" title="Copiar" onClick={copiar} className="btn-ghost shrink-0 p-1"><Copy className="h-4 w-4" /></button>
                 </div>
                 <p className="mt-1 flex items-center justify-center gap-1 text-[11px] text-zinc-400">
-                  <Clock className="h-3 w-3" /> Válido por {expiraMin} min · un solo uso · 3 intentos
+                  <Clock className="h-3 w-3" /> Válido por {expiraMin} min · un solo uso · 2 intentos
                 </p>
               </div>
 

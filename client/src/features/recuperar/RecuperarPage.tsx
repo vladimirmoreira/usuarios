@@ -3,7 +3,7 @@ import { KeyRound, Copy, Loader2, CheckCircle2, ArrowRight, ArrowLeft, ShieldChe
 import { PublicoAPI } from '../../api/endpoints';
 
 /** Segundos que la nueva clave permanece visible antes de auto-reiniciar el portal. */
-const HOLD_SECONDS = 15;
+const HOLD_SECONDS = 10;
 
 type Paso = 'iduser' | 'clave' | 'listo';
 
