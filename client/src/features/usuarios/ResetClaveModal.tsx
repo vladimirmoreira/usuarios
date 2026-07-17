@@ -1,38 +1,33 @@
 import { useEffect, useState } from 'react';
-import { X, KeyRound, ShieldCheck, Copy, Loader2 } from 'lucide-react';
+import { X, KeyRound, Copy, Loader2, ShieldCheck, Clock } from 'lucide-react';
 import toast from '../../lib/notify';
 import { UsuariosAPI } from '../../api/endpoints';
 
-type Info = { simulado: boolean; mail_habilitado: boolean; codigo: string; expira_min: number };
-
-/** Reset de clave con código de verificación (simulado: el código se muestra al operador). */
+/**
+ * Reset de clave por PORTAL de auto-servicio.
+ * RR.HH. genera un verificador de 15 caracteres (válido 1 h, un solo uso) y se
+ * lo pasa al usuario por cualquier medio (WhatsApp/correo). El usuario completa
+ * el reset desde el portal público (/recuperar), donde el sistema le asigna una
+ * clave nueva de 7 dígitos.
+ */
 export default function ResetClaveModal({ iduser, onClose }: { iduser: string; onClose: () => void }) {
   const [loading, setLoading] = useState(true);
-  const [info, setInfo]       = useState<Info | null>(null);
-  const [codigo, setCodigo]   = useState('');
-  const [nuevaClave, setNuevaClave] = useState('');
-  const [saving, setSaving]   = useState(false);
+  const [verificador, setVerificador] = useState('');
+  const [expiraMin, setExpiraMin] = useState(60);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    UsuariosAPI.resetClaveIniciar(iduser)
-      .then((r) => { if (active) setInfo(r); })
-      .catch((e: any) => { if (active) toast.error(e?.response?.data?.error || 'No se pudo generar el código'); })
+    UsuariosAPI.resetClavePortal(iduser)
+      .then((r) => { if (active) { setVerificador(r.verificador); setExpiraMin(r.expira_min); } })
+      .catch((e: any) => { if (active) setError(e?.response?.data?.error || 'No se pudo generar el verificador'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [iduser]);
 
-  const confirmar = async () => {
-    if (codigo.trim().length < 4) { toast.error('Ingresá el código de verificación'); return; }
-    setSaving(true);
-    try {
-      const r: any = await UsuariosAPI.resetClaveConfirmar(iduser, codigo.trim(), nuevaClave.trim() || undefined);
-      if (r?.ok === false) { toast.error(r.mensaje || 'No se pudo reiniciar'); return; }
-      toast.success('Clave reiniciada correctamente');
-      onClose();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || 'Código inválido o vencido');
-    } finally { setSaving(false); }
+  const copiar = () => {
+    navigator.clipboard?.writeText(verificador);
+    toast.success('Verificador copiado');
   };
 
   return (
@@ -49,44 +44,40 @@ export default function ResetClaveModal({ iduser, onClose }: { iduser: string; o
         <div className="space-y-3 px-6 py-4">
           {loading ? (
             <div className="flex items-center gap-2 py-4 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" /> Generando código de verificación…
+              <Loader2 className="h-4 w-4 animate-spin" /> Generando verificador…
             </div>
-          ) : info ? (
+          ) : error ? (
+            <p className="py-4 text-sm text-rose-600">{error}</p>
+          ) : (
             <>
               <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-center dark:border-brand-900 dark:bg-brand-900/20">
-                <p className="text-xs text-zinc-500">
-                  Código de verificación {info.mail_habilitado ? '(correo no configurado — simulado)' : '(simulado)'}
-                </p>
+                <p className="text-xs text-zinc-500">Código verificador (para el usuario)</p>
                 <div className="mt-1 flex items-center justify-center gap-2">
-                  <span className="font-mono text-2xl font-bold tracking-[0.3em] text-brand-700 dark:text-brand-300">{info.codigo}</span>
-                  <button type="button" title="Copiar"
-                          onClick={() => { navigator.clipboard?.writeText(info.codigo); toast.success('Código copiado'); }}
-                          className="btn-ghost p-1"><Copy className="h-4 w-4" /></button>
+                  <span className="select-all break-all font-mono text-lg font-bold tracking-wider text-brand-700 dark:text-brand-300">{verificador}</span>
+                  <button type="button" title="Copiar" onClick={copiar} className="btn-ghost shrink-0 p-1"><Copy className="h-4 w-4" /></button>
                 </div>
-                <p className="mt-1 text-[11px] text-zinc-400">Válido por {info.expira_min} min. Comunicáselo al usuario.</p>
+                <p className="mt-1 flex items-center justify-center gap-1 text-[11px] text-zinc-400">
+                  <Clock className="h-3 w-3" /> Válido por {expiraMin} min · un solo uso · 3 intentos
+                </p>
               </div>
 
-              <div>
-                <label className="label">Ingresá el código</label>
-                <input value={codigo} onChange={(e) => setCodigo(e.target.value)} maxLength={8} inputMode="numeric"
-                       className="input mt-1 text-center font-mono tracking-[0.3em]" placeholder="------" />
-              </div>
-              <div>
-                <label className="label">Nueva clave (opcional)</label>
-                <input value={nuevaClave} onChange={(e) => setNuevaClave(e.target.value)} maxLength={20}
-                       className="input mt-1" placeholder="Vacío = clave por defecto / documento de legajo" />
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">
+                <p className="mb-1 flex items-center gap-1 font-semibold text-zinc-700 dark:text-zinc-200">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Pasos para el usuario
+                </p>
+                <ol className="ml-4 list-decimal space-y-0.5">
+                  <li>Pasale este código por WhatsApp o correo.</li>
+                  <li>Debe abrir el portal <span className="font-mono">/recuperar</span> (red local).</li>
+                  <li>Ingresa su usuario <span className="font-mono font-semibold">{iduser}</span> + el código.</li>
+                  <li>Al confirmar, el sistema le muestra su nueva clave de 7 dígitos.</li>
+                </ol>
               </div>
             </>
-          ) : (
-            <p className="py-4 text-sm text-rose-600">No se pudo generar el código.</p>
           )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-zinc-200 px-6 py-4 dark:border-zinc-700">
-          <button onClick={onClose} className="btn-outline" disabled={saving}>Cancelar</button>
-          <button onClick={confirmar} className="btn-primary" disabled={saving || loading || !info}>
-            <ShieldCheck className="h-4 w-4" /> {saving ? 'Aplicando…' : 'Verificar y reiniciar'}
-          </button>
+          <button onClick={onClose} className="btn-primary">Listo</button>
         </div>
       </div>
     </div>

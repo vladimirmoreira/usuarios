@@ -203,6 +203,19 @@ const UsuarioController = {
     } catch (e) { next(e); }
   },
 
+  /**
+   * Portal de auto-reset — RR.HH. genera el verificador de 15 caracteres.
+   * Se lo comunica al usuario, que completa el reset desde el portal público.
+   */
+  async resetClavePortal(req, res, next) {
+    try {
+      const r = await OperacionesService.generarSolicitudReset({
+        iduser: req.params.iduser, rptUser: rptDe(req), ip: ipDe(req),
+      });
+      res.json(r);
+    } catch (e) { next(e); }
+  },
+
   async reasignarSucursal(req, res, next) {
     try {
       const r = await OperacionesService.reasignarSucursal({

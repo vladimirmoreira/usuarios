@@ -138,6 +138,8 @@ router.post(
   validate({ ...idParam, body: z.object({ codigo: z.string().min(4).max(8), nuevaClave: z.string().max(20).optional() }) }),
   ctrl.resetClaveConfirmar,
 );
+// Portal de auto-reset: RR.HH. genera el verificador (el usuario lo aplica en /api/publico).
+router.post('/:iduser/reset-clave/portal', validate(idParam), ctrl.resetClavePortal);
 router.post(
   '/:iduser/reasignar-sucursal',
   validate({ ...idParam, body: z.object({ idsucursal: z.number().int().positive() }) }),

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import LoginPage from './features/login/LoginPage';
+import RecuperarPage from './features/recuperar/RecuperarPage';
 import UsuariosPage from './features/usuarios/UsuariosPage';
 import InactividadPage from './features/usuarios/InactividadPage';
 import AccesosPage from './features/accesos/AccesosPage';
@@ -23,6 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/recuperar" element={<RecuperarPage />} />
       <Route
         path="/"
         element={

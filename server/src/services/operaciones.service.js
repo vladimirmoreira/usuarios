@@ -18,7 +18,9 @@
  *   - CAMBIO_PERFIL es un UPDATE directo (sin PCD_ACTUALIZA_PERFIL).
  */
 
+const crypto = require('crypto');
 const OperacionesModel = require('../models/operaciones.model');
+const ResetPortalModel = require('../models/resetPortal.model');
 const AccesosService = require('./accesos.service');
 const MasterSyncService = require('./masterSync.service');
 const MasterModel = require('../models/master.model');
@@ -73,6 +75,18 @@ function replicarMaster(iduser, { ip, claveNueva } = {}) {
   MasterSyncService.syncUsuario(iduser, { ip, claveNueva }).catch((err) => {
     logger.warn({ err: err?.message, iduser }, 'masterSync failed (best-effort)');
   });
+}
+
+/** Comparaci\u00f3n de strings en tiempo constante (evita timing attacks). */
+function comparaSegura(a, b) {
+  const ba = Buffer.from(String(a ?? ''), 'utf8');
+  const bb = Buffer.from(String(b ?? ''), 'utf8');
+  if (ba.length !== bb.length) {
+    // Comparar contra s\u00ed mismo para no filtrar la longitud por tiempo.
+    crypto.timingSafeEqual(ba, ba);
+    return false;
+  }
+  return crypto.timingSafeEqual(ba, bb);
 }
 
 /** \u00bfEl rol del usuario replica a MASTER? (tipo_usuario.master=1; ADMIN siempre). */
@@ -523,6 +537,107 @@ const OperacionesService = {
     _resetCodes.delete(idu);
     const clave = nuevaClave && String(nuevaClave).trim() ? String(nuevaClave).trim() : null;
     return this._aplicarReset({ iduser, rptUser, ip }, clave);
+  },
+
+  // ===========================================================================
+  // OP 3 (bis) — PORTAL PÚBLICO DE AUTO-RESET
+  // ---------------------------------------------------------------------------
+  // RR.HH. genera un VERIFICADOR de 15 caracteres (1 h, un solo uso, 3 intentos)
+  // y se lo pasa al usuario por cualquier medio. El usuario entra al portal
+  // (solo alcanzable desde la red local), ingresa iduser + verificador y, al
+  // confirmar, el sistema genera una CLAVE_NUEVA de 7 dígitos única y la aplica
+  // en USUARIO.pass + GG_MESERO.clave + MASTER (reusando _aplicarReset).
+  // ===========================================================================
+
+  /** RR.HH.: genera y persiste el verificador; lo devuelve para pasárselo al usuario. */
+  async generarSolicitudReset(ctx) {
+    const { iduser, rptUser, ip } = ctx;
+    const u = await OperacionesModel.estadoUsuario(iduser);
+    if (!u) { const e = new Error('Usuario no encontrado'); e.status = 404; throw e; }
+    await ResetPortalModel.ensureTabla();
+
+    const verificador = await ResetPortalModel.generarVerificador();
+    const generado = new Date();
+    const expira = new Date(generado.getTime() + ResetPortalModel.TTL_MIN * 60 * 1000);
+
+    await ResetPortalModel.supersederPendientes(iduser);
+    await ResetPortalModel.insertar({ verificador, iduser, generadoPor: rptUser, ip, generado, expira });
+
+    await audit({
+      iduser, idoperacion: OP.RESET_CLAVE, rptUser,
+      observacion: buildDetalle([`[portal] Solicitud de auto-reset generada (verificador de 15, válido ${ResetPortalModel.TTL_MIN} min)`]),
+    });
+    return { ok: true, verificador, expira_min: ResetPortalModel.TTL_MIN };
+  },
+
+  /**
+   * Localiza la solicitud pendiente del usuario y valida el verificador.
+   * Devuelve el registro si todo está OK; lanza error de negocio en caso contrario.
+   * Cuenta los intentos fallidos y bloquea a los `MAX_INTENTOS`.
+   */
+  async _validarSolicitud(iduser, verificador) {
+    await ResetPortalModel.ensureTabla();
+    const rec = await ResetPortalModel.pendientePorUser(iduser);
+    if (!rec) { const e = new Error('No hay una solicitud de reseteo pendiente para ese usuario.'); e.status = 404; throw e; }
+    if (rec.expira && new Date(rec.expira) < new Date()) {
+      const e = new Error('La solicitud venció. Pedí una nueva a RR.HH.'); e.status = 400; throw e;
+    }
+    if (Number(rec.intentos) >= ResetPortalModel.MAX_INTENTOS) {
+      const e = new Error('Solicitud bloqueada por demasiados intentos. Pedí una nueva a RR.HH.'); e.status = 429; throw e;
+    }
+    if (!comparaSegura(verificador, rec.verificador)) {
+      const n = Number(rec.intentos) + 1;
+      if (n >= ResetPortalModel.MAX_INTENTOS) await ResetPortalModel.marcarBloqueado(rec.verificador);
+      else await ResetPortalModel.setIntentos(rec.verificador, n);
+      const rest = Math.max(0, ResetPortalModel.MAX_INTENTOS - n);
+      const e = new Error(rest > 0
+        ? `Código incorrecto. Intentos restantes: ${rest}.`
+        : 'Código incorrecto. Solicitud bloqueada; pedí una nueva a RR.HH.');
+      e.status = 400; throw e;
+    }
+    return rec;
+  },
+
+  /**
+   * Portal — paso 1: solo iduser. Verifica que exista una solicitud pendiente,
+   * vigente y no bloqueada, SIN consumir intentos (aún no hay verificador).
+   */
+  async portalExiste(ctx) {
+    const { iduser } = ctx;
+    await ResetPortalModel.ensureTabla();
+    const rec = await ResetPortalModel.pendientePorUser(iduser);
+    if (!rec) { const e = new Error('No hay una solicitud de reseteo pendiente para ese usuario.'); e.status = 404; throw e; }
+    if (rec.expira && new Date(rec.expira) < new Date()) {
+      const e = new Error('La solicitud venció. Pedí una nueva a RR.HH.'); e.status = 400; throw e;
+    }
+    if (Number(rec.intentos) >= ResetPortalModel.MAX_INTENTOS) {
+      const e = new Error('Solicitud bloqueada por demasiados intentos. Pedí una nueva a RR.HH.'); e.status = 429; throw e;
+    }
+    const nombre = await ResetPortalModel.nombreUsuario(iduser).catch(() => null);
+    return {
+      ok: true,
+      iduser: String(iduser).trim(),
+      nombre,
+      intentos_restantes: ResetPortalModel.MAX_INTENTOS - Number(rec.intentos),
+    };
+  },
+
+  /** Portal — valida iduser + verificador y devuelve el nombre del usuario. */
+  async portalValidar(ctx) {
+    const { iduser, verificador } = ctx;
+    await this._validarSolicitud(iduser, verificador);
+    const nombre = await ResetPortalModel.nombreUsuario(iduser).catch(() => null);
+    return { ok: true, iduser: String(iduser).trim(), nombre };
+  },
+
+  /** Portal — paso 2: re-valida, genera la clave de 7 dígitos y aplica el reset. */
+  async portalAplicar(ctx) {
+    const { iduser, verificador, ip } = ctx;
+    const rec = await this._validarSolicitud(iduser, verificador);
+    const claveNueva = await ResetPortalModel.generarClave();
+    await this._aplicarReset({ iduser, rptUser: rec.generado_por || 'PORTAL', ip }, claveNueva);
+    await ResetPortalModel.marcarUsada(rec.verificador, claveNueva);
+    return { ok: true, nuevaClave: claveNueva };
   },
 
   // ===========================================================================

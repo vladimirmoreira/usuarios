@@ -283,6 +283,22 @@ async function migrarDDL() {
     // sin ninguna empresa logueable. No pisa valores ya cargados (solo NULL).
     `UPDATE empresas SET accesible = 1
        WHERE CAST(TRIM(idempresa) AS VARCHAR(2) CHARACTER SET OCTETS) = '1' AND accesible IS NULL`,
+    // RESET_CLAVE_PORTAL — verificadores del portal público de auto-reset (BD system,
+    // junto a USUARIO). También se crea on-demand desde resetPortal.model.js para
+    // deploys ya migrados (METADATA_EJECUTADO=1 no vuelve a correr migrarDDL).
+    `CREATE TABLE reset_clave_portal (
+       VERIFICADOR  VARCHAR(20) NOT NULL,
+       IDUSER       VARCHAR(10) NOT NULL,
+       GENERADO     TIMESTAMP,
+       EXPIRA       TIMESTAMP,
+       USADO        SMALLINT DEFAULT 0 NOT NULL,
+       INTENTOS     SMALLINT DEFAULT 0 NOT NULL,
+       GENERADO_POR VARCHAR(10),
+       IP_ORIGEN    VARCHAR(40),
+       CLAVE_NUEVA  VARCHAR(20),
+       CONSTRAINT PK_RESET_CLAVE_PORTAL PRIMARY KEY (VERIFICADOR)
+     )`,
+    `CREATE INDEX IDX_RESET_PORTAL_USER ON reset_clave_portal (IDUSER)`,
   ];
 
   // BD server: tablas que deben existir + columnas adicionales

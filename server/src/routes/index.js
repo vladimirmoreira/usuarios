@@ -5,6 +5,8 @@ const auth = require('../middlewares/auth');
 const franja = require('../middlewares/franjaHoraria');
 
 router.use('/auth', require('./auth.routes'));
+// Portal público de auto-reset (sin auth; protegido por candado de IP local).
+router.use('/publico', require('./publico.routes'));
 router.use('/usuarios', auth, franja, require('./usuario.routes'));
 router.use('/accesos', auth, franja, require('./accesos.routes'));
 router.use('/roles', auth, franja, require('./rol.routes'));

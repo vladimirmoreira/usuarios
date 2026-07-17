@@ -32,6 +32,11 @@ const schema = z.object({
   SERVER_PASSWORD: z.string(),
   SERVER_CHARSET: z.string().default('NONE'),
 
+  // Portal público de auto-reset de clave. Allowlist opcional de IPs/prefijos
+  // (coma-separado) que pueden acceder a /api/publico/*. Si se deja vacío, se
+  // permite cualquier IP privada/loopback (red local) y se rechaza el resto.
+  RESET_PORTAL_IPS: z.string().optional(),
+
   // BD MASTER (Contabilidad / RRHH). Opcional: si no está configurada se omite la replicación.
   MASTER_HOST: z.string().optional(),
   MASTER_PORT: z.coerce.number().default(3050),

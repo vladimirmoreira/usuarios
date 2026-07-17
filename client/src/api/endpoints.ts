@@ -1,4 +1,29 @@
+import axios from 'axios';
 import api from './client';
+
+/**
+ * Cliente "pelado" (sin interceptores de auth) para el portal público de
+ * auto-reset. No adjunta token ni redirige a /login: las rutas son sin auth.
+ */
+const publicApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+  headers: { 'Content-Type': 'application/json; charset=utf-8' },
+});
+
+export const PublicoAPI = {
+  existe: (iduser: string) =>
+    publicApi
+      .post<{ ok: boolean; iduser: string; nombre: string | null; intentos_restantes: number }>('/publico/reset/existe', { iduser })
+      .then((r) => r.data),
+  validar: (iduser: string, verificador: string) =>
+    publicApi
+      .post<{ ok: boolean; iduser: string; nombre: string | null }>('/publico/reset/validar', { iduser, verificador })
+      .then((r) => r.data),
+  aplicar: (iduser: string, verificador: string) =>
+    publicApi
+      .post<{ ok: boolean; nuevaClave: string }>('/publico/reset/aplicar', { iduser, verificador })
+      .then((r) => r.data),
+};
 
 export type EmpresaOpcion = { idempresa: string; nombre: string };
 export type LoginResp =
@@ -50,6 +75,9 @@ export const UsuariosAPI = {
     api.post(`/usuarios/${iduser}/reset-clave/iniciar`).then((r) => r.data) as Promise<{ ok: boolean; simulado: boolean; mail_habilitado: boolean; codigo: string; expira_min: number }>,
   resetClaveConfirmar: (iduser: string, codigo: string, nuevaClave?: string) =>
     api.post(`/usuarios/${iduser}/reset-clave/confirmar`, { codigo, nuevaClave: nuevaClave || undefined }).then((r) => r.data),
+  /** Portal de auto-reset: RR.HH. genera el verificador de 15 caracteres. */
+  resetClavePortal: (iduser: string) =>
+    api.post(`/usuarios/${iduser}/reset-clave/portal`).then((r) => r.data) as Promise<{ ok: boolean; verificador: string; expira_min: number }>,
   reasignarSucursal: (iduser: string, idsucursal: number) =>
     api.post(`/usuarios/${iduser}/reasignar-sucursal`, { idsucursal }).then((r) => r.data),
   cambiarPerfil: (iduser: string, idperfil: number) =>
