@@ -636,7 +636,18 @@ const OperacionesService = {
     const rec = await this._validarSolicitud(iduser, verificador);
     const claveNueva = await ResetPortalModel.generarClave();
     await this._aplicarReset({ iduser, rptUser: rec.generado_por || 'PORTAL', ip }, claveNueva);
-    await ResetPortalModel.marcarUsada(rec.verificador, claveNueva);
+
+    // Auditoría explícita del auto-servicio: el usuario completó el reset y generó
+    // su clave de 7 dígitos desde el portal (además del registro que hace _aplicarReset).
+    await audit({
+      iduser, idoperacion: OP.RESET_CLAVE, rptUser: rec.generado_por || 'PORTAL',
+      observacion: buildDetalle([`[portal] Auto-reset completado por el usuario: nueva clave de 7 dígitos generada (solicitud de ${rec.generado_por || 'RRHH'})`]),
+    });
+
+    // Limpieza inmediata de la tabla temporal: borra TODO lo del usuario (usada +
+    // pendientes + reemplazadas + bloqueadas). El rastro queda en HISTORIAL_USUARIO.
+    await ResetPortalModel.borrarPorUser(iduser);
+
     return { ok: true, nuevaClave: claveNueva };
   },
 

@@ -150,8 +150,17 @@ const ResetPortalModel = {
     await query('system', 'UPDATE reset_clave_portal SET usado = 3 WHERE verificador = ?', [verificador]);
   },
 
-  async marcarUsada(verificador, claveNueva) {
-    await query('system', 'UPDATE reset_clave_portal SET usado = 1, clave_nueva = ? WHERE verificador = ?', [claveNueva, verificador]);
+  /**
+   * Limpieza inmediata tras un reset exitoso: borra TODAS las filas del usuario
+   * de la tabla temporal (la usada + pendientes + reemplazadas + bloqueadas).
+   * El rastro permanente del reset queda en HISTORIAL_USUARIO (auditoría).
+   */
+  async borrarPorUser(iduser) {
+    await query(
+      'system',
+      'DELETE FROM reset_clave_portal WHERE UPPER(TRIM(iduser)) = UPPER(TRIM(?))',
+      [iduser],
+    );
   },
 
   /** Nombre/apellido del usuario (para mostrar en el portal). */
