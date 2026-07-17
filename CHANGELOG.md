@@ -7,6 +7,40 @@ y las fechas están en formato `AAAA-MM-DD` (zona `America/Asuncion`).
 
 ---
 
+## [No publicado] — 2026-07-17
+
+### Agregado — Portal público de auto-reset de clave
+
+Autoservicio para que el propio usuario reinicie su contraseña sin intervención de un
+operador en la máquina. **Desplegado en producción.**
+
+- **RR.HH. genera un verificador** de 15 caracteres (alfanumérico + especiales) desde el
+  modal "Reiniciar clave" (`ResetClaveModal`) y lo comunica al usuario por cualquier medio
+  (botón copiar). Válido **1 hora**, un solo uso, atado al `iduser`.
+- **Portal público `/recuperar`** (sin login) en dos pasos: (1) el usuario ingresa su `iduser`
+  y el sistema confirma que hay un reseteo pendiente; (2) ingresa el verificador con **2 intentos**.
+  Al acertar, el sistema **genera una clave nueva de 7 dígitos única** y la aplica en
+  `USUARIO.pass` + `GG_MESERO.clave` + MASTER (reusa `_aplicarReset`). La clave se muestra
+  **10 segundos** con botón copiar y el portal se **reinicia solo** (limpia la clave de memoria).
+- **Tabla `RESET_CLAVE_PORTAL`** (BD `system`, PK = `VERIFICADOR`): estados `USADO`
+  `0` pendiente · `1` usado · `2` reemplazado · `3` bloqueado. Se **autocrea on-demand**
+  (chequea `RDB$RELATIONS` primero) además de estar en `migrarDDL`. Al regenerar para el mismo
+  usuario, las pendientes previas pasan a `usado=2` (el último verificador invalida al anterior).
+- **Limpieza inmediata:** tras un reset exitoso se **borran todas** las filas de ese usuario en
+  la tabla temporal (usada + pendientes + reemplazadas + bloqueadas). El rastro permanente queda
+  en `HISTORIAL_USUARIO`.
+- **Auditoría:** se registra tanto la **generación por RR.HH.** como la **aplicación por el
+  usuario** (auto-servicio) en `HISTORIAL_USUARIO` (op 3 "Reinicio de Clave").
+- **Seguridad:** candado de red local (`middlewares/ipLocal.js`) que valida por `X-Real-IP`
+  (seteado por nginx, no falsificable) — solo loopback/rangos privados o `RESET_PORTAL_IPS`;
+  rate-limit propio (10/min); verificador de alta entropía con comparación en tiempo constante;
+  rutas `/api/publico/*` sin auth pero protegidas por el candado. En `nginx-usuarios.conf`,
+  `location = /recuperar` restringe la página a la LAN (`allow`/`deny`) sin afectar otras rutas.
+- **Endpoints:** `POST /api/usuarios/:iduser/reset-clave/portal` (RR.HH., con auth) y públicos
+  `POST /api/publico/reset/existe|validar|aplicar`.
+
+---
+
 ## [No publicado] — 2026-07-16
 
 ### Agregado — Franja horaria de ingreso

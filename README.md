@@ -2,7 +2,7 @@
 
 > Refactorización moderna del formulario `frm_principal` / **Menú de Accesos** del sistema legado (Delphi/WinForms sobre Firebird) hacia un stack **Node.js + Express + React/TypeScript**, arquitectura **MVC**, autenticación **JWT** y codificación **UTF‑8** end‑to‑end.
 
-Última actualización: **10‑07‑2026**. Ver historial de cambios en [`CHANGELOG.md`](CHANGELOG.md).
+Última actualización: **17‑07‑2026**. Ver historial de cambios en [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -49,6 +49,7 @@ El módulo administra el ciclo de vida completo de los **usuarios** y sus **acce
 | 31 | **Replicación a sucursales** | ✅ | Motor outbox (`CONFIGURACION_USUARIO_REPLICA` + `REPLICACION_COLA`) que replica el usuario completo a las BD de cada sucursal (system/server/master). Cascada de dependencias **constraint-driven**, transformaciones (ORDEN, offset `GG_MESERO.IDSUCURSAL`), dedupe, worker con reintentos y purga, propagación de rol con progreso, badge de alertas. Ver `MetadataProyecto.md`. |
 | 32 | **Franja horaria de ingreso** | ✅ | `CONFIGURACION_USUARIO.HORA_INICIO/HORA_FIN` (`HH:MM`): restringe login y sesiones abiertas a ese rango (middleware por request cacheado 60s). `NULL` = sin límite; no aplica a Admin; soporta franjas nocturnas. |
 | 33 | **Documentación + Tutorial** | ✅ | Menús con ficha técnica (Admin) y manual de usuario (todos): buscador, índice, lector paginado, mockups SVG y export a PDF. |
+| 33b | **Portal de auto-reset de clave** | ✅ | RR.HH. genera un verificador de 15 caracteres (1 h, un solo uso, 2 intentos); el usuario reinicia su clave desde el portal público `/recuperar` (solo red local) y el sistema le asigna una clave de 7 dígitos. Ver §5.22. |
 | 34 | **Legajos** | 🟡 pendiente | Datos de RRHH del usuario (vinculación con `LEGAJO`). |
 | 35 | **Biometría** | 🟡 pendiente | Captura/enrollment huella + sincronización dispositivos. |
 | 36 | **Tests E2E** | 🟡 pendiente | Playwright cubriendo flujos críticos. |
@@ -599,6 +600,54 @@ Cada usuario tiene una fecha de caducidad opcional `USUARIO.HASTA_VIGENCIA` (TIM
 - **Cron diario** (`jobs/vigencia.job.js`, default **04:00**, `VIGENCIA_CRON`; habilitado salvo `ENABLE_VIGENCIA_JOB=0`): `UsuarioModel.caducarVencidos()` pone **estado = 0 (Inactivo)** a los usuarios **activos** cuya vigencia venció, y registra la observación *"Baja automática por vigencia vencida"* en `HISTORIAL_USUARIO` (visible en Auditoría y en el Historial del usuario). Reversible con **Reactivar** (o extendiendo la vigencia).
 - **Normalización legacy** (en el seed de metadatos, no se pisan fechas existentes; excluye Admin y plantillas): usuarios sin fecha con estado Activo/Bloqueado → `31/12/2050`; Inactivos → fecha actual. Pensado para instalaciones nuevas / re-inicialización.
 - **Vista "Incidencias"** (`/usuarios/inactividad`, menú **Incidencias**): unifica en una sola grilla las cuentas activas que requieren atención, con columna **Motivo**: *Caducado* (vigencia vencida), *Por caducar* (a vencer dentro de la ventana configurable, informativo) y *A inactivar* (sin actividad ≥ umbral). Backend: `InactividadModel.listarIncidencias(...)`; endpoint `GET /usuarios/inactividad?dias=&diasPorCaducar=&idperfil=`. La inhabilitación por lote solo procesa caducados + a inactivar.
+
+### 5.22 Portal público de auto-reset de clave
+
+Autoservicio para que el usuario reinicie su propia contraseña sin que un operador tenga que
+hacerlo en su máquina. Dos códigos con roles distintos:
+
+| Código | Quién lo genera | Para qué | Formato |
+|---|---|---|---|
+| **Verificador** | RR.HH. (al clic en "Reiniciar clave") | Autenticar al usuario en el portal | 15 caracteres alfanuméricos + especiales · 1 h · un solo uso · 2 intentos |
+| **Clave nueva** | El sistema (al aplicar) | Es la contraseña nueva real | 7 dígitos numéricos, única |
+
+**Flujo:**
+1. RR.HH. genera el verificador (`POST /usuarios/:iduser/reset-clave/portal` → `generarSolicitudReset`),
+   lo copia y se lo pasa al usuario por cualquier medio. Se persiste en `RESET_CLAVE_PORTAL`
+   (BD `system`, PK `VERIFICADOR`) con `EXPIRA = ahora + 1 h`; las pendientes previas del mismo
+   usuario pasan a `USADO = 2` (el último invalida al anterior).
+2. El usuario abre el portal público **`/recuperar`** (ruta fuera de `<Protected>`), **paso 1:**
+   ingresa su `iduser` → `POST /publico/reset/existe` confirma que hay solicitud pendiente y
+   vigente (sin consumir intentos).
+3. **Paso 2:** ingresa el verificador → `POST /publico/reset/aplicar`. `_validarSolicitud`
+   compara en tiempo constante y descuenta intentos; a los **2 fallos** marca `USADO = 3`
+   (bloqueado). Al acertar, `generarClave()` produce un 7 dígitos único, `_aplicarReset` lo
+   escribe en `USUARIO.pass` + `GG_MESERO.clave` + MASTER, y se **borran todas** las filas de ese
+   usuario en la tabla temporal (`borrarPorUser`). La clave se muestra **10 s** con botón copiar y
+   el portal se recarga solo (limpia la clave de memoria/DOM).
+
+**Estados de `RESET_CLAVE_PORTAL.USADO`:** `0` pendiente · `1` usado · `2` reemplazado · `3` bloqueado.
+La tabla se **autocrea on-demand** (`ensureTabla` chequea `RDB$RELATIONS` antes de crear) además de
+estar en `migrarDDL`, para funcionar en deploys ya migrados.
+
+**Auditoría:** se registran ambos eventos en `HISTORIAL_USUARIO` (op 3 "Reinicio de Clave"): la
+**generación** por RR.HH. y la **aplicación** (auto-servicio) por el usuario. El rastro permanente
+queda ahí aunque la fila temporal se purgue.
+
+**Seguridad (defensa en capas):**
+- **Candado de red local** (`middlewares/ipLocal.js`) en `/api/publico/*`: toma la IP de
+  **`X-Real-IP`** (que nginx fija con `$remote_addr`, no falsificable; cae a `req.ip` en dev).
+  Permite loopback / rangos privados RFC1918 o la allowlist opcional `RESET_PORTAL_IPS`; rechaza
+  el resto con `403`.
+- **Rate-limit propio** de 10 req/min por IP (aparte del global).
+- **Verificador de alta entropía** (15 chars) con comparación en tiempo constante; 2 intentos y
+  vencimiento a 1 h hacen la fuerza bruta inviable.
+- **nginx:** `location = /recuperar` restringe la página a la LAN (`allow`/`deny`) — match exacto,
+  no afecta `/api` ni las demás rutas (`deploy/nginx-usuarios.conf`).
+
+> **Nota de unicidad:** como las filas usadas se purgan, el chequeo de "7 dígitos único" aplica
+> contra las solicitudes vivas del momento (colisión histórica entre usuarios distintos es inocua —
+> cada usuario tiene su propia clave).
 
 ---
 
